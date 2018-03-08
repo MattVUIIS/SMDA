@@ -1,0 +1,131 @@
+@charset "UTF-8"
+body {
+  font-family: 'Open Sans', sans-serif;
+  margin: 0px;
+  padding: 0px;
+}
+h2 {
+  margin: 0px;
+  padding: 0px;
+}
+p {
+  font-family: 'Open Sans', sans-serif;
+}
+#pageContainer {
+  width: 100%;
+}
+#appBody {
+  width: 990px;
+  margin: 0 auto;
+}
+#appHeader {
+  font-family: 'Open Sans', sans-serif;
+  /* background-color: #6F7997; */
+  background-color: #555f7d;
+  width: 100%;
+  text-align: center;
+}
+ul.navigation {
+  margin: 0px;
+  padding: 0px;
+}
+ul.navigation > li {
+  display: inline-block;
+  padding: 0px 20px;
+}
+#appLeftColumn {
+  display: inline-block;
+  width: 750px;
+  margin-top: 48px;
+  margin-right: 16px;
+  vertical-align: top;
+}
+.appLeftColumnHeader {
+  font-family: 'Open Sans', sans-serif;
+  text-align: center;
+  font-size: 1.5em;
+}
+#appRightColumn {
+  display: inline-block;
+  width: 200px;
+  min-height: 400px;
+  border-radius: 20px;
+  margin-top: 48px;
+  background-color:#F1F4FD;
+  padding: 40px 10px;
+  box-sizing: border-box;
+  font-family: 'Open Sans', sans-serif;
+  text-align: center;
+}
+.itemTitle {
+  font-weight: bold;
+}
+.itemDetails {
+  font-style: italic;
+}
+.appTitle {
+  font-family: 'Open Sans', sans-serif;
+  /* text-align: left; */
+  font-size: 3em;
+  color: black;
+  display: inline-block;
+  padding-bottom: 5px;
+}
+.appDescription {
+  font-family: 'Open Sans', sans-serif;
+  /* text-align: left; */
+  font-size: 1em;
+  color: black;
+}
+.navlink {
+  font-family: 'Open Sans', sans-serif;
+  font-size: 1em;
+  text-decoration: none;
+  color: #FFF;
+  cursor: pointer;
+  padding: 0px 10px;
+  margin: 0px;
+}
+.pagelink {
+  font-weight: bold;
+  color: #555f7d;
+  cursor: pointer;
+  text-decoration: none;
+}
+.fieldButtonContainer {
+  text-align: center;
+  padding: 10px;
+}
+.fieldButton {
+  font-family: 'Open Sans', sans-serif;
+  font-size: 1.1em;
+  font-weight: bold;
+  text-align: center;
+  vertical-align: middle;
+  margin: 0px;
+  padding: 0px 10px;
+  height: 30px;
+}
+@font-face {
+  font-family: 'Open Sans';
+  font-style: normal;
+  font-weight: 400;
+}
+@media screen and (max-width: 990px) {
+  #appBody {
+    width: 100%;
+  }
+  #appLeftColumn {
+    width: 75%;
+    margin-top: 48px;
+    margin-right: 16px;
+  }
+  #appRightColumn {
+    width: 24%;
+    margin-top: 48px;
+    padding: 40px 10px;
+    box-sizing: border-box;
+    font-family: 'Open Sans', sans-serif;
+    text-align: center;
+  }
+}

@@ -1,0 +1,8 @@
+#!/bin/bash -x
+cd $PROJECTHOME
+
+ssh -p ${SRV_PORT} root@${SRV_IP} 'sudo supervisorctl stop smda-web-server'
+
+rsync -aO --delete --no-perms --progress --exclude-from ./tools/excluded_from_copy.txt -e "ssh -p ${SRV_PORT}" app/ vuiisdev@${SRV_IP}:/opt/smda/
+
+ssh -p ${SRV_PORT} root@${SRV_IP} 'supervisorctl start smda-web-server'

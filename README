@@ -1,0 +1,61 @@
+================================================================================
+SMDA - Squirrel Monkey Digital Atlas
+================================================================================
+
+SMDA is a web-based volume viewer to be used with MR, DTI, block, histology,
+glyph, and label images.
+
+The volumetric data must be made available to the VM under its /smda directory.
+This directory can be configured in app/web_server/smda_web_server.cfg. The
+required structure of the volumetric data is described in <another document>.
+
+================================================================================
+Installation
+================================================================================
+To install SMDA onto a VM (tested on CentOS 7), source the build script.
+
+$ source build_env.sh <vm_ip> <vm_ssh_port>
+
+This sets up the environment and enables access to the scripts in the tools
+folder. Now copy any ssl certificates and keys to the 'certs' folder under the
+project root and edit root/etc/nginx.conf, if necessary. Then enter the password
+for the ssl certificate into root/etc/keys/fifo.
+
+Now you can execute the smda-install script.
+
+$ ./smda-install.sh 2>&1 | tee install.log
+
+You may be prompted to enter passwords for the root user and the vuiisdev user
+several times. At the end of the install process, the VM will be rebooted and
+the web server should be available.
+
+The main code lives under app/web_server and app/web_server/js.
+Whenever changes are made to the javascript, they must be compiled and minified
+by the Google Closure compiler. You can do this with a Makefile target:
+
+$ make package
+
+You can also just copy all of the javascript files in app/web_server/js to the
+root/srv/smda/js folder:
+
+$ make
+
+Then you can copy all of the static files (i.e. js, css, html) files under
+root/srv/smda to the VM
+
+$ copystatic
+
+When changes are made to the server python code, you can copy and restart the
+server with the following command:
+
+$ copyweb
+
+If you ever need to recopy any configuration files, use this command:
+
+$ copyconfig
+
+To view various logs from your host machine:
+
+$ tailwebserver
+$ tailnginx
+

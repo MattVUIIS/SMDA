@@ -1,0 +1,18 @@
+body {
+  padding-left: 5px;
+  padding-right: 5px;
+}
+.center-pills { display: inline-block; }
+.nav, .pagination, .carousel, .panel-title a { cursor: pointer; }
+.accordion-heading a.accordion-toggle { display: inline-block; }
+hr {
+  height: 1%;
+  color: #333;
+  background-color: #333;
+}
+.checkbox-box {
+  margin: 5px;
+}
+.btn, .nav-pills {
+  border-radius: 0px;
+}

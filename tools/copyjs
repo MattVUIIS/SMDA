@@ -1,0 +1,3 @@
+#!/bin/bash
+cd $PROJECTHOME
+rsync -aO --delete --no-perms --progress --exclude-from ./tools/excluded_from_copy.txt -e "ssh -p ${SRV_PORT}" root/srv/smda/js/ vuiisdev@${SRV_IP}:/srv/smda/js

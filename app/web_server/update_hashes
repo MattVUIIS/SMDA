@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+from __future__ import print_function
+import argparse
+import hashlib
+import os
+import pprint
+import sys
+
+from six.moves import configparser
+
+import static_hash
+
+
+def import_memcache(config):
+    try:
+        import memcache
+        memcached_host = config.get('cache', 'memcache_host')
+        memcached_port = config.get('cache', 'memcache_port')
+        cache = memcache.Client((memcached_host, memcached_port))
+    except ImportError as e:
+        print('Can not update memcache:', e)
+        cache = None
+    return cache
+
+def calculate_hashes(folders, cache, config):
+    if not cache:
+        cache = import_memcache(config)
+    for folder in folders:
+        print('reading', folder)
+        print('hashes:', file=sys.stderr)
+        for root, dirs, files in os.walk(folder):
+            for fn in files:
+                filename = os.path.join(root, fn)
+                hash_key = static_hash.get_hash_key(filename, folder)
+                if not hash_key:
+                    continue
+                digest = static_hash.get_hash(filename, folder)
+                updated = False
+                if cache:
+                    cache_digest = cache.get(hash_key)
+                    if cache_digest != digest:
+                        cache.delete(hash_key)
+                        cache.set(hash_key, digest)
+                        updated = True
+                print('{0}: {1} {2}'.format(hash_key, digest, '*updated*' if updated else ''),
+                    file=sys.stderr)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('js_folder', default='/srv/smda/js', nargs='?')
+    parser.add_argument('css_folder', default='/srv/smda/css', nargs='?')
+    parser.add_argument('img_folder', default='/srv/smda/img', nargs='?')
+    options = parser.parse_args()
+
+    config = configparser.ConfigParser()
+    config.read('/opt/smda/web_server/smda_web_server.cfg')
+
+    cache = import_memcache(config)
+
+    calculate_hashes([options.js_folder, options.css_folder, options.img_folder],
+        cache, config)

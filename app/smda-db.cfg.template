@@ -1,0 +1,3 @@
+[database]
+query_port_range: 8100-8163
+connect_str: dbname=smda user=smda password=XXXX

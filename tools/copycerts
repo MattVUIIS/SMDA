@@ -1,0 +1,4 @@
+#!/bin/bash -x
+cd $PROJECTHOME
+scp cert/* root@${SRV_IP}:/etc/pki/wcssl/
+

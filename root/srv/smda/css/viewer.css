@@ -1,0 +1,264 @@
+#ctnrViewerToolbar {
+    background-color: #00609e;
+    text-align: center;
+}
+.ctnrViewerRightControls {
+    background-color: #00609e;
+    padding: 0px;
+    margin: 0px;
+    text-align: left;
+    vertical-align: top;
+    float: right;
+}
+.ctnrViewerRightControls td {
+    padding: 60px;
+}
+.ctnrViewerBottomControls {
+    background-color: #00609e;
+}
+#panelContainer {
+    display: inline;
+    border: none;
+    text-align: left;
+    vertical-align: top;
+    height: 100%;
+}
+.panelRow {
+    display: block;
+    border: none;
+    text-align: left;
+    vertical-align: top;
+    margin: 0px;
+    padding: 0px;
+    line-height: 0px;
+}
+.panelParent {
+    display: inline-block;
+    position: relative;
+    overflow: visible;
+    border: none;
+}
+.panelCanvas {
+    position: absolute;
+    border: none;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 1);
+}
+.panelSpinner {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0px;
+    left: 0px;
+    padding: 0px;
+    margin: 0px;
+    pointer-events: none;
+}
+.panelTooltip {
+    position: absolute;
+    text-align: center;
+    padding: 0px;
+    margin: 0px;
+    color: #fff;
+    pointer-events: none;
+    overflow: visible;
+    white-space: nowrap;
+    z-index: 1000000 !important;
+}
+#ctnrViewerPanControls {
+    text-align: center;
+    margin: 0px;
+    padding: 10px;
+}
+#ctnrViewerZoomControls {
+    text-align: center;
+    margin: 0px;
+    padding: 10px;
+}
+.ctnrViewerLevelControls {
+    text-align: center;
+    margin: 0px;
+    padding: 10px;
+}
+.controlButton {
+    background-color: white;
+    background-repeat: no-repeat;
+    background-position: 0px 0px;
+    width: 34px;
+    height: 34px;
+}
+#txtZoom {
+    width: 2.5em !important;
+}
+.viewerNumberInput {
+    display: inline;
+    text-align: right !important;
+    width: 3.5em !important;
+    color: #222;
+}
+.viewerRangeInput {
+    width: 100px !important;
+    padding: 0px;
+    margin: auto;
+}
+.viewerLayerRangeInput {
+    display: inline !important;
+    width: 50px !important;
+    padding: 0px;
+    margin: auto;
+    vertical-align: middle;
+    float: right;
+}
+.viewerLayerDropDown {
+    -webkit-border-radius: 0;
+    -moz-border-radius: 0;
+    border-radius: 0;
+    color: #222;
+    text-align: right;
+}
+.viewerCheckboxInput {
+    display: inline;
+    -webkit-border-radius: 0;
+    -moz-border-radius: 0;
+    border-radius: 0;
+}
+.viewerLayerNumberInput {
+
+}
+.viewerDropDown {
+    -webkit-border-radius: 0;
+    -moz-border-radius: 0;
+    border-radius: 0;
+    color: #222;
+}
+.viewerLabel {
+    color: #222;
+}
+.viewerRow {
+    margin: auto;
+    padding: 10px;
+    width: 100%;
+    text-align: center;
+    vertical-align: middle;
+}
+.viewerColumn {
+    padding-left: 5px;
+    padding-right: 5px;
+    text-align: center;
+}
+.viewerColumnHeader {
+    padding-left: 5px;
+    padding-right: 5px;
+    vertical-align: bottom !important;
+}
+.viewerCenteredGroup {
+    display: block;
+    text-align: center;
+}
+.cursorCrosshair {
+    cursor: crosshair;
+    cursor: -webkit-crosshair;
+}
+.cursorPan {
+    cursor: grab;
+    cursor: -webkit-grab;
+}
+.cursorPanning {
+    cursor: grabbing;
+    cursor: -webkit-grabbing;
+}
+.cursorFreeDraw {
+    cursor: crosshair;
+}
+.cursorEraser {
+    cursor: url(/img/webviewer/cursor/tool_overlay_eraser.png) 16 16, auto;
+}
+.cursorZoomIn {
+    cursor: zoom-in;
+    cursor: -webkit-zoom-in;
+}
+.cursorZoomOut {
+    cursor: zoom-out;
+    cursor: -webkit-zoom-out;
+}
+.ng-invalid {
+  border: solid red 3px;
+}
+/*
+    drag and drop
+*/
+.dropzone ul[dnd-list] {
+    min-height: 42px;
+    margin: 0px;
+    padding-left: 0px;
+}
+.dropzone li {
+    display: block;
+}
+/**
+ * Reduce opacity of elements during the drag operation. This allows the user
+ * to see where he is dropping his element, even if the element is huge. The
+ * .dndDragging class is automatically set during the drag operation.
+ */
+.dndDragging {
+    opacity: 0.8;
+}
+/**
+ * The dndDraggingSource class will be applied to the source element of a drag
+ * operation.
+ */
+.dndDraggingSource {
+    display: none !important;
+}
+/**
+ * An element with .dndPlaceholder class will be added as child of the dnd-list
+ * while the user is dragging over it.
+ */
+.dndPlaceholder {
+    background-color: #ddd !important;
+    display: block;
+    min-height: 26px;
+}
+/***************************** Element type specific styles *****************************/
+.layer-list {
+    min-height: 120px !important;
+    list-style-type: none;
+    padding-left: 0px;
+}
+.layer-list > li {
+    display: block;
+    background-color: #333333;
+    border: none;
+    color: #aaa;
+    font-weight: 700;
+    padding: 3px;
+    text-align: left;
+    vertical-align: middle;
+}
+.layer-class-list {
+    min-height: 120px !important;
+    list-style-type: none;
+    padding-left: 0px;
+}
+.layer-class-list > li {
+    display: block;
+    border: none;
+    color: #aaa;
+    font-weight: 700;
+    padding: 3px;
+    text-align: left;
+    vertical-align: middle;
+}
+.layer-icon {
+    height: 24px;
+}
+.panelContainerContainer {
+    padding: 0px;
+}
+li.unavailable_view {
+    background-color: #cc0000 !important;
+}
+span.unavailable_view {
+    color: #eee !important;
+}

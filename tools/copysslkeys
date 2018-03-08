@@ -1,0 +1,3 @@
+#!/bin/bash -x
+cd $PROJECTHOME
+scp -P ${SRV_PORT} -r wcssl root@${SRV_IP}:/etc/pki/

@@ -1,0 +1,5 @@
+Fix Mozilla bug #240
+
+Reduced clutter on the layers. Groups of layers can be made visible/invisible
+by checking/unchecking the modality class boxes. Replaced tabs with spaces.
+

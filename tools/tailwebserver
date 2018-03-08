@@ -1,0 +1,2 @@
+#!/bin/bash
+ssh -t -p ${SRV_PORT} vuiisdev@${SRV_IP} 'tail -n 50 -f /opt/smda/web_server/smda_web_server.log'

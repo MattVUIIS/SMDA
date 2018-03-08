@@ -1,0 +1,10 @@
+session.key
+query.db
+task.db
+*.pyc
+*.swp
+*.swo
+*.log
+.DS_Store
+/data
+wcssl

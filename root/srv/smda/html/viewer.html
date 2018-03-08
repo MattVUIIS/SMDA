@@ -1,0 +1,314 @@
+<form class="simple-form" novalidate>
+  Preferred browser: Firefox<br>
+
+
+
+  <!-- Viewer toolbox -->
+  <div class="row">
+    <div id="ctnrViewerToolbar" class="cols-sm-12 viewerRow">
+      <!-- Subject -->
+      <div class="form-group viewerColumn">
+        <label class="viewerLabel">
+          Subject
+          <select name="subject" class="viewerDropDown"
+            ng-model="viewer.subject"
+            ng-change="viewer.context.setNewSubject(viewer.subject)">
+            <option ng-repeat="subject_info in viewer.context.getSubjects()"
+              value="{{subject_info.id}}">
+              {{subject_info.subject}}
+            </option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div id="ctnrViewerToolbar" class="col-sm-12">
+      <div class="btn-group">
+        <a href class="btn btn-primary"
+          tooltip="Crosshair Tool" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+          ng-class="{ active:viewer.context.toolset.isActiveTool('crosshair') }"
+          ng-click="viewer.context.toolset.activateCrosshairTool()"
+          ng-dblclick="viewer.context.toolset.centerCrosshair()">
+          <img src="img/webviewer/crosshair.png">
+        </a>
+        <a href class="btn btn-primary"
+          tooltip="Pan Tool" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+          ng-class="{ active:viewer.context.toolset.isActiveTool('pan') }"
+          ng-click="viewer.context.toolset.activatePanTool()"
+          ng-dblclick="viewer.context.toolset.centerPan()">
+          <img src="img/webviewer/tool_pan.png">
+        </a>
+        <a href class="btn btn-primary"
+          tooltip="Minimap Tool" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+          ng-class="{ active:viewer.context.toolset.isActiveTool('minimap') }"
+          ng-click="viewer.context.toolset.activateMinimapTool()">
+          <img src="img/webviewer/tool_map.png">
+        </a>
+        <a href class="btn btn-primary"
+          tooltip="Zoom In" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+          ng-class="{ active:viewer.context.toolset.isActiveTool('zoom_in') }"
+          ng-click="viewer.context.toolset.activateZoomInTool()">
+          <img src="img/webviewer/zoom_in.png">
+        </a>
+        <a href class="btn btn-primary"
+          tooltip="Zoom Out" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+          ng-class="{ active:viewer.context.toolset.isActiveTool('zoom_out') }"
+          ng-click="viewer.context.toolset.activateZoomOutTool()">
+          <img src="img/webviewer/zoom_out.png">
+        </a>
+        <!-- <a href class="btn btn-primary"
+          tooltip="Overlay Free Draw Tool" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+          ng-class="{ active:viewer.context.toolset.isActiveTool('free_draw') }"
+          ng-click="viewer.context.toolset.activateOverlayFreeDrawTool()">
+          <img src="img/webviewer/tool_overlay_free_draw.png">
+        </a>
+        <a href class="btn btn-primary"
+          tooltip="Overlay Eraser Tool" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+          ng-class="{ active:viewer.context.toolset.isActiveTool('eraser') }"
+          ng-click="viewer.context.toolset.activateOverlayEraserTool()">
+          <img src="img/webviewer/tool_overlay_eraser.png">
+        </a>
+        <a href class="btn btn-primary"
+          tooltip="Overlay Clear Tool" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+          ng-click="viewer.context.toolset.useOverlayClearTool()">
+          <img src="img/webviewer/tool_overlay_clear.png">
+        </a> -->
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="display: flex">
+    <div class="col-sm-8 panelContainerContainer">
+      <div id="panelContainer" viewer-panel-container></div>
+    </div>
+    <!-- Layer toolbox -->
+    <div class="col-sm-4 ctnrViewerRightControls">
+      <div class="form-group viewerRow">
+        <div class="viewerColumn">
+          <!-- Sessions dropdown -->
+          <div ng-show="viewer.context.session_names.length">
+            <label class="viewerLabel">
+              Sessions
+            </label>
+            <select class="viewerLayerDropDown"
+                ng-model="viewer.context.session_name"
+                ng-change="viewer.context.setSessionName(viewer.context.session_name)">
+              <option ng-repeat="session_name in viewer.context.session_names" value="{{session_name}}">
+                {{session_name}}
+              </option>
+            </select>
+          </div>
+          <!-- View class box -->
+          <label class="viewerLabel">
+          Modalities (check to make layers visible)
+          </label>
+          <ul class="layer-class-list">
+            <li ng-repeat="view_class in viewer.context.view_classes"
+              ng-class="view_class.css">
+              <img class="layer-icon"
+                ng-src="{{view_class.getLayerImageURL()}}"
+                dnd-nodrag/>
+              <input type="checkbox" class="viewerCheckboxInput"
+                ng-model="view_class.active"
+                ng-change="viewer.context.toggleViewClass(view_class)"/>
+                {{view_class.name}}
+            </li>
+          </ul>
+          <!-- View layers box -->
+          <label class="viewerLabel">
+          Contrasts (drag to reorder layers)
+          </label>
+          <ul class="layer-list" dnd-list
+            dnd-drop="dropViewLayer(index, item)">
+            <li ng-repeat="layer in viewer.context.layers"
+              ng-show="viewer.context.views[layer].visible"
+              ng-class="viewer.context.views[layer].getBackgroundClass()"
+              dnd-draggable="layer"
+              dnd-effect-allowed="move">
+              {{view_layer=viewer.context.views[layer];""}}
+              <img class="layer-icon"
+                ng-src="{{view_layer.getLayerImageURL()}}"
+                tooltip="{{view_layer.getTooltip()}}"
+                dnd-handle/>
+              <input type="checkbox" class="viewerCheckboxInput"
+                ng-model="view_layer.active"
+                ng-change="viewer.context.toggleView(view_layer.key)"
+                dnd-nodrag/>
+              <span ng-class="view_layer.getTextClass()">
+                {{view_layer.name}}
+              </span>
+              <!-- Volume dropdown -->
+              <select class="viewerLayerDropDown"
+                  ng-show="view_layer.layer_opt && view_layer.layer_opt.volumes.length"
+                  tooltip="Volume" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+                  ng-model="viewer[view_layer.volume_name]"
+                  ng-change="view_layer.setVivoAndSession(view_layer.vivo, view_layer.session, viewer[view_layer.volume_name])">
+                <option ng-repeat="volume in view_layer.layer_opt.volumes" value="{{volume}}">
+                  {{volume}}
+                </option>
+              </select>
+              <!-- Histology Stain dropdown -->
+              <select class="viewerLayerDropDown"
+                  ng-show="view_layer.layer_opt && view_layer.layer_opt.hist_stains.length"
+                  ng-model="viewer.stain"
+                  ng-change="view_layer.setStain(viewer.stain)">
+                <option ng-repeat="stain in view_layer.layer_opt.hist_stains" value="{{stain}}">
+                  {{stain}}
+                </option>
+              </select>
+              <!-- Alpha range -->
+              <input id="scrollAlpha" type="range" class="viewerLayerRangeInput"
+                ng-show="view_layer.show_alpha"
+                min="{{viewer.context.min_alpha}}" step="1" max="{{viewer.context.max_alpha}}"
+                tooltip="Transparency" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+                ng-model="viewer[view_layer.prefix + '_a']"
+                ng-change="view_layer.setAlpha(viewer[view_layer.prefix + '_a'])"
+                number-convert dnd-nodrag/>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- <div class="clearfix"></div> -->
+
+  <!-- Crosshair toolbox -->
+  <div class="row ctnrViewerBottomControls">
+    <div class="col-sm-12" ng-show="viewer.context.showInUI('vol_crosshair')">
+      <div class="form-inline viewerRow">
+        <div class="form-group viewerColumnHeader">
+          <label class="viewerLabel">
+            Zoom
+          </label>
+        </div>
+        <div class="form-group viewerColumn">
+          <label class="viewerLabel">
+            Sagittal (L -> R)
+            <input id="crosshairX" class="viewerNumberInput" type="number"
+            min="{{viewer.context.min_sa_slice}}" step="1" max="{{viewer.context.max_sa_slice}}"
+              tooltip="Sagittal Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.sa_slice" ng-change="viewer.context.setSagittalSlice(viewer.sa_slice)"
+              number-convert />
+            <input id="scrollCrosshairX" type="range" class="viewerRangeInput"
+              min="{{viewer.context.min_sa_slice}}" step="1" max="{{viewer.context.max_sa_slice}}"
+              tooltip="Change current sagittal slice" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.sa_slice" ng-change="viewer.context.setSagittalSlice(viewer.sa_slice)"
+              number-convert />
+            <input id="scrollZoom" type="range" class="viewerRangeInput"
+              min="{{viewer.context.min_zoom}}" step="1" max="{{viewer.context.max_zoom}}"
+              tooltip="Sagittal Zoom" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.sa_zoom"
+              ng-change="viewer.context.setSagittalZoom(viewer.sa_zoom)"
+              number-convert />
+          </label>
+        </div>
+        <div class="form-group viewerColumn">
+          <label class="viewerLabel">
+            Coronal (P -> A)
+            <input id="crosshairZ" class="viewerNumberInput" type="number"
+            min="{{viewer.context.min_slice}}" step="1" max="{{viewer.context.max_slice}}"
+              tooltip="Coronal Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.slice" ng-change="viewer.context.setCoronalSlice(viewer.slice)"
+              number-convert />
+            <input id="scrollCrosshairZ" type="range" class="viewerRangeInput"
+              min="{{viewer.context.min_slice}}" step="1" max="{{viewer.context.max_slice}}"
+              tooltip="Change current coronal slice" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.slice" ng-change="viewer.context.setCoronalSlice(viewer.slice)"
+              number-convert />
+            <input id="scrollZoom" type="range" class="viewerRangeInput"
+              min="{{viewer.context.min_zoom}}" step="1" max="{{viewer.context.max_zoom}}"
+              tooltip="Coronal Zoom" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.zoom"
+              ng-change="viewer.context.setCoronalZoom(viewer.zoom)"
+              number-convert />
+          </label>
+        </div>
+        <div class="form-group viewerColumn">
+          <label class="viewerLabel">
+            Axial (I -> S)
+            <input id="crosshairY" class="viewerNumberInput" type="number"
+            min="{{viewer.context.min_ax_slice}}" step="1" max="{{viewer.context.max_ax_slice}}"
+              tooltip="Axial Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.ax_slice" ng-change="viewer.context.setAxialSlice(viewer.ax_slice)"
+              number-convert />
+            <input id="scrollCrosshairY" type="range" class="viewerRangeInput"
+              min="{{viewer.context.min_ax_slice}}" step="1" max="{{viewer.context.max_ax_slice}}"
+              tooltip="Change current axial slice" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.ax_slice" ng-change="viewer.context.setAxialSlice(viewer.ax_slice)"
+              number-convert />
+            <input id="scrollZoom" type="range" class="viewerRangeInput"
+              min="{{viewer.context.min_zoom}}" step="1" max="{{viewer.context.max_zoom}}"
+              tooltip="Axial Zoom" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.ax_zoom"
+              ng-change="viewer.context.setAxialZoom(viewer.ax_zoom)"
+              number-convert />
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slice measurement toolbox -->
+  <div class="row ctnrViewerBottomControls">
+    <div class="col-sm-12" ng-show="viewer.context.showInUI('slice_thickness')">
+      <div class="form-inline viewerRow">
+        <div class="form-group viewerColumn">
+          <label class="viewerLabel">
+            Sagittal Position (in mm)<br>
+            <input id="crosshairX" class="viewerNumberInput" type="text"
+              tooltip="Sagittal Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-value="viewer.context.getSagittalSlicePosition()"
+              ng-disabled="true"/>
+          </label>
+        </div>
+        <div class="form-group viewerColumn">
+          <label class="viewerLabel">
+            Coronal Position (in mm)<br>
+            <input id="crosshairZ" class="viewerNumberInput" type="text"
+              tooltip="Coronal Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-value="viewer.context.getCoronalSlicePosition()"
+              ng-disabled="true"/>
+          </label>
+        </div>
+        <div class="form-group viewerColumn">
+          <label class="viewerLabel">
+            Axial Position (in mm)<br>
+            <input id="crosshairY" class="viewerNumberInput" type="text"
+            min="{{viewer.context.min_ax_slice}}" step="1" max="{{viewer.context.max_ax_slice}}"
+              tooltip="Axial Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-value="viewer.context.getAxialSlicePosition()"
+              ng-disabled="true"/>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slice toolbox -->
+  <div class="row ctnrViewerBottomControls">
+    <div class="col-sm-12" ng-show="viewer.context.showInUI('slice_controls')">
+      <div class="form-inline viewerRow">
+        <!-- Slice -->
+        <div class="form-group viewerColumn">
+          <label class="viewerLabel">
+            Slice
+            <input id="txtSliceNumber" type="number" class="viewerNumberInput"
+              min="{{viewer.context.min_slice}}" step="1" max="{{viewer.context.max_slice}}"
+              tooltip="Change current slice" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.slice" ng-change="viewer.context.setCoronalSlice(viewer.slice)"
+              number-convert />
+            <input id="scrollSlice" type="range" class="viewerRangeInput"
+              min="{{viewer.context.min_slice}}" step="1" max="{{viewer.context.max_slice}}"
+              tooltip="Change current slice" tooltip-popup-delay="{{viewer.tooltip_delay}}"
+              ng-model="viewer.slice" ng-change="viewer.context.setCoronalSlice(viewer.slice)"
+              number-convert />
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</form>

@@ -1,0 +1,10 @@
+#!/bin/bash -x
+cd $PROJECTHOME
+ssh -p ${SRV_PORT} root@${SRV_IP} -- 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+cat ~/.ssh/id_rsa.pub | ssh -p ${SRV_PORT} root@${SRV_IP} -- 'cat >> ~/.ssh/authorized_keys'
+
+#There is a known bug in CentOS 6/SELinux that results in all client presented
+#certificates to be ignored when SELinux is set to Enforcing.
+#Detailed here: http://bugs.centos.org/print_bug_page.php?bug_id=4959
+#We must restore the file .ssh folder condition to make certificate login work.
+ssh -p ${SRV_PORT} root@${SRV_IP} -- 'restorecon -R -v /root/.ssh'

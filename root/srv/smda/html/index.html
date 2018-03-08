@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="application">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Vanderbilt University Institute of Imaging Science</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+
+  <base href="/smda/">
+
+  <!-- Favorite Icons and Apple Icons -->
+  <link rel="shortcut icon" href="img/icons/VUIIS_favicon.ico">
+  <link rel="apple-touch-icon" href="img/icons/VUIIS_Apple_Icon.png" />
+
+  <!-- Page Specific CSS -->
+  <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
+  <link rel="stylesheet" type="text/css" href="css/main.css?v={{ get_hash('css', 'main.css') }}" />
+  <link rel="stylesheet" type="text/css" href="css/viewer.css?v={{ get_hash('css', 'viewer.css') }}" />
+
+  <!-- Javascript -->
+  <script type="text/javascript" src="js/jquery-2.1.4.min.js"></script>
+  <script type="text/javascript" src="js/jquery.mousewheel.min.js"></script>
+  <script type="text/javascript" src="js/bootstrap.min.js"></script>
+  <!-- <script type="text/javascript" src="js/angular.min.js"></script> -->
+  <script type="text/javascript" src="js/angular.js"></script>
+  <script type="text/javascript" src="js/angular-animate.min.js"></script>
+  <script type="text/javascript" src="js/angular-drag-and-drop-lists.min.js"></script>
+  <script type="text/javascript" src="js/angular-route.min.js"></script>
+  <script type="text/javascript" src="js/angular-ui-router.min.js"></script>
+  <script type="text/javascript" src="js/spin.min.js"></script>
+  <script type="text/javascript" src="js/angular-spinner.min.js"></script>
+  <script type="text/javascript" src="js/ui-bootstrap-tpls-0.13.3.min.js"></script>
+  <script type="text/javascript" src="js/gl-matrix-min.js"></script>
+  <script type="text/javascript" src="js/moment.min.js"></script>
+  <script type="text/javascript" src="js/livestamp.min.js"></script>
+
+  <script type="text/javascript" src="js/util.js?v={{ get_hash('js', 'util.js') }}"></script>
+  <script type="text/javascript" src="js/viewer.min.js?v={{ get_hash('js', 'viewer.min.js') }}"></script>
+
+  <script type="text/javascript" src="js/home_module.js?v={{ get_hash('js', 'home_module.js') }}"></script>
+  <script type="text/javascript" src="js/nav_module.js?v={{ get_hash('js', 'nav_module.js') }}"></script>
+  <script type="text/javascript" src="js/app.js?v={{ get_hash('js', 'app.js') }}"></script>
+</head>
+
+<!-- Start Angular templates -->
+<script type="text/ng-template" id="main_frame.html">
+<div class="row show-grid">
+  <div class="col-xs-12 col-sm-12" style="margin-top: 5px">
+    <div ng-controller="NavigationController as navCtrl">
+      <ul class="nav nav-pills center-pills">
+        <!-- <li ui-sref-active="active"> -->
+        <li ng-class="{active: navCtrl.isInHomeState()}">
+          <a ui-sref="main.home">Home</a>
+        </li>
+        <li ng-class="{active: navCtrl.isInAtlasState()}">
+          <a ui-sref="main.atlas.viewer">Atlas</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+<div class="row show-grid">
+  <div class="col-xs-9 col-sm-9 main">
+    <div ui-view></div>
+  </div>
+</div>
+</script>
+
+<script type="text/ng-template" id="single_frame.html">
+<div class="row show-grid">
+  <div class="col-xs-12 col-sm-12 main">
+    <div ui-view></div>
+  </div>
+</div>
+</script>
+
+<script type="text/ng-template" id="404.html">
+<p>
+  Unfortunately, we can&#39;t find that page. You may <a ui-sref="main.home">return to the home page</a>.
+</p>
+</script>
+<script type="text/ng-template" id="request_failed.html">
+<div class="modal-header">
+  <h4 class="modal-title">Oops!</h4>
+</div>
+<div class="modal-body">
+  <p>We are unable to complete your request at this time!</p>
+  <p class="help-block"><span ng-bind="details"></span></p>
+  <p>Sorry for the inconvenience.</p>
+</div>
+<div class="modal-footer">
+  <button type="button" class="btn btn-default" ng-click="close()">Close</button>
+</div>
+</script>
+<!-- End Angular templates -->
+
+<!-- Start shader code -->
+<!-- Vertex (position) Shader -->
+<script id="shader-vs" type="x-shader/x-vertex">
+attribute vec3 aPosition;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+void main(void) {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aPosition, 1.0);
+}
+</script>
+
+<!-- Vertex (position, textureCoord) Shader -->
+<script id="shader-vs-tex" type="x-shader/x-vertex">
+attribute vec3 aPosition;
+attribute vec2 aTexCoord;
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+varying vec2 vTexCoord;
+
+void main(void) {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aPosition, 1.0);
+    vTexCoord = aTexCoord;
+}
+</script>
+
+<!-- Color Fragment Shader -->
+<script id="shader-fs-color" type="x-shader/x-fragment">
+precision mediump float;
+
+uniform vec4 vColor;
+
+void main(void) {
+    gl_FragColor = vColor;
+}
+</script>
+
+<!-- Inverse Color Fragment Shader -->
+<script id="shader-fs-white" type="x-shader/x-fragment">
+precision mediump float;
+
+void main(void) {
+    gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+}
+</script>
+
+<!-- Basic Texture Fragment Shader -->
+<script id="shader-fs-tex" type="x-shader/x-fragment">
+precision mediump float;
+
+uniform sampler2D uSampler;
+varying vec2 vTexCoord;
+uniform float uAlpha;
+
+vec4 vTexImageColor;
+vec4 vTexImageAlphaColor;
+
+void main(void) {
+    vTexImageColor = texture2D(uSampler, vTexCoord);
+    vTexImageAlphaColor = vec4(vTexImageColor.rgb, vTexImageColor.a * uAlpha);
+    gl_FragColor = vTexImageAlphaColor;
+}
+</script>
+
+<!-- No Alpha Texture Fragment Shader -->
+<script id="shader-fs-no-alpha-tex" type="x-shader/x-fragment">
+precision mediump float;
+
+uniform sampler2D uSampler;
+varying vec2 vTexCoord;
+uniform float uAlpha;
+
+vec4 vTexImageColor;
+vec4 vTexImageAlphaColor;
+float fAlpha;
+
+void main(void) {
+    vTexImageColor = texture2D(uSampler, vTexCoord);
+    fAlpha = (1.0 - vTexImageColor.a > 0.01 ? 0.0 : vTexImageColor.a) * uAlpha;
+    vTexImageAlphaColor = vec4(vTexImageColor.rgb, fAlpha);
+    gl_FragColor = vTexImageAlphaColor;
+}
+</script>
+
+<!-- End shader code -->
+
+<body>
+  <div class="container">
+    <div class="col-md-6">
+      <h3>SMDA</h3>
+      <h4>Squirrel Monkey Digital Atlas</h4>
+    </div>
+    <div class="pull-right">
+      <a href="http://www.vuiis.vanderbilt.edu">
+        <img src="img/main/VUIIS_Logo.png" alt="VUIIS Logo">
+      </a>
+    </div>
+  </div>
+  <hr>
+  <div class="container">
+    <div class="row show-grid">
+      <div class="col-xs-12 col-sm-12">
+        <div ui-view></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

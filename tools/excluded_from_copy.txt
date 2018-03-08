@@ -1,0 +1,8 @@
+*.db
+*.pyc
+*.log
+*.swp
+.DS_Store
+.git
+smda.sock
+python-venv

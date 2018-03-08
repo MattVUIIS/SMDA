@@ -1,0 +1,3 @@
+#!/bin/bash
+ssh -t -p ${SRV_PORT} vuiisdev@${SRV_IP} "echo 'flush_all' | nc localhost 11211"
+

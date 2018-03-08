@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+from __future__ import print_function, division
+import argparse
+import ConfigParser
+import json
+import os
+import re
+import sys
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--dry-run', action='store_true')
+parser.add_argument('--use-folder', nargs='+', type=str)
+parser.add_argument('atlas_root', default='', nargs='?')
+options = parser.parse_args()
+
+atlas_root = options.atlas_root
+if not atlas_root:
+    _config = ConfigParser.ConfigParser()
+    _config.read('smda_web_server.cfg')
+    atlas_root = _config.get('atlas', 'root')
+
+use_folders = options.use_folder
+
+def folderize(root_path, dry_run=False):
+    print('#!/bin/bash -e')
+    top_level = os.path.abspath(root_path)
+    print('TOP_LEVEL={0}'.format(top_level))
+    subdirs = os.listdir(root_path)
+    if use_folders:
+        subdirs = [os.path.join(root_path, x) for x in use_folders]
+    for subdir in subdirs:
+        for root, dirs, files in os.walk(subdir):
+            nf = len(dirs) + len(files)
+            if nf > 200:
+                print('#{0} has {1} files'.format(root, nf))
+                print('cd ${TOP_LEVEL}')
+                subdir = os.path.relpath(os.path.join(
+                    os.path.dirname(top_level), root), top_level)
+                print('cd {0}'.format(subdir))
+                rename_list = []
+                new_folders = set()
+                for f in files:
+                    m = re.search('(slice_|row_|col_)(\d+)', f)
+                    if m:
+                        slice_n = int(m.group(2))
+                        hundreds = slice_n // 100 % 10
+                        new_folders.add(str(hundreds))
+                        new_file = '{0}/{1}'.format(hundreds, f)
+                        rename_list.append((f, new_file))
+                for folder in new_folders:
+                    try:
+                        print('mkdir -p {0}'.format(folder))
+                    except:
+                        pass
+                for old_file, new_file in rename_list:
+                    print('mv {0} {1}'.format(old_file, new_file))
+
+folderize(atlas_root, options.dry_run)
+

@@ -1,0 +1,2 @@
+#!/bin/bash
+ssh -t -p ${SRV_PORT} vuiisdev@${SRV_IP} 'su root -c "tail -f /var/log/supervisor/smda_web_server*stderr*.log"'

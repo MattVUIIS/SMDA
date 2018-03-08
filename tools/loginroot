@@ -1,0 +1,2 @@
+#!/bin/bash
+ssh -p ${SRV_PORT} root@${SRV_IP}

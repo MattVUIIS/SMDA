@@ -1,0 +1,242 @@
+#!/usr/bin/env python
+from __future__ import print_function, division
+import argparse
+import csv
+import errno
+import imghdr
+import json
+import os
+import PIL
+import pprint
+import random
+import re
+#import subprocess
+import sys
+#import tempfile
+import yaml
+
+#import matplotlib.pyplot as plt
+import numpy as np
+
+#from multiprocessing.dummy import Pool, cpu_count
+from six.moves import configparser
+from skimage import measure
+
+
+"""
+def show_image(img):
+    fig, ax = plt.subplots()
+    ax.imshow(img, interpolation=None)
+    ax.axis('image')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    plt.show()
+
+def show_image_and_contours(img, contours):
+    fig, ax = plt.subplots()
+    ax.imshow(img, interpolation=None, cmap=plt.cm.gray)
+    for n, contour in enumerate(contours):
+        ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
+    ax.axis('image')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    plt.show()
+"""
+THIS_DIR = os.path.dirname(os.path.realpath(__file__))
+
+
+def read_config(yaml_path):
+    config = {}
+    try:
+        with open(yaml_path, 'r') as f:
+            config = yaml.load(f)
+            if config is None:
+                config = {}
+    except IOError as e:
+        #File doesn't exist or could not be opened
+        if e.errno != errno.ENOENT:
+            print('error while opening', yaml_path, ':', e,
+                file=sys.stderr)
+    except yaml.YAMLError as e:
+        print('error while parsing', yaml_path, ':', e,
+            file=sys.stderr)
+    return config
+
+def get_label_data(label_colors, label_path, config, overwrite_files=False):
+    label_types = [
+        'roi',
+        'MR',
+    ]
+    #ncores = cpu_count()
+    #pool = Pool(ncores)
+    overwrite_flag = (None, '--overwrite')[overwrite_files]
+    input_args = []
+    for label_type in os.listdir(label_path):
+        path = os.path.join(label_path, label_type)
+        if label_type in label_types:
+            label_config = config.get('labels', {}).get(label_type, {})
+            if not label_config.get('skip', False):
+                for axis in ['coronal', 'axial', 'sagittal']:
+                    axis_path = os.path.join(path, axis)
+                    _write_contour_data(axis, axis_path, label_config,
+                        label_type, label_colors)
+                    #input_args.append((axis, axis_path, label_config, label_type, label_colors))
+                    #config_handle, config_fn = tempfile.mkstemp()
+                    #with os.fdopen(config_handle, 'w') as config_f:
+                    #    config_f.write(json.dumps({'label_config': label_config, 'label_colors': label_colors}))
+                    #args = ['python', 'write_contour_data.py', '--',
+                    #    axis, axis_path, label_type, config_fn]
+                    #if overwrite_flag:
+                    #    args.append(overwrite_flag)
+                    #input_args.append(args)
+    #result = pool.map(run_contour_process, input_args)
+    #pool.close()
+    #pool.join()
+
+def run_contour_process(args):
+    os.chdir(THIS_DIR)
+    return subprocess.call(args, cwd=os.getcwd())
+
+def write_contour_data(args):
+    return _write_contour_data(*args)
+
+def _write_contour_data(axis, axis_path, label_config, label_type,
+        label_colors):
+    contours_path = os.path.join(axis_path, 'contours')
+    print('contours', axis_path)
+    if not os.path.isdir(contours_path):
+        os.makedirs(contours_path)
+    white = None
+    white_mask = {}
+    attrib = label_config.get('attrib', {})
+    axis_attrib = attrib.get(axis, {})
+    if axis_attrib:
+        print(label_type, axis, 'axis_attrib', axis_attrib)
+    for root, dirs, files in os.walk(axis_path):
+        random.shuffle(files)
+        for item_name in files:
+            if not item_name.startswith('slice'):
+                continue
+            img_path = os.path.join(axis_path, root, item_name)
+            if not imghdr.what(img_path):
+                continue
+            item_num = int(re.search('(\d+)', item_name).group(1))
+            slice_contours_path = os.path.join(contours_path,
+                'slice_{0}.txt'.format(item_num))
+            if os.path.exists(slice_contours_path) and not overwrite_files:
+                print(img_path, 'skipped')
+                continue
+            img = PIL.Image.open(img_path)
+            scale = 64
+            print(slice_contours_path, 'resizing image')
+            img = img.resize((img.size[0] * scale, img.size[1] * scale))
+            #Handle attributes
+            rotate = axis_attrib.get('rotate')
+            if rotate:
+                verb, angle = rotate.split()
+                angle = float(angle)
+                print(slice_contours_path, 'rotate', rotate)
+                img = img.rotate(angle * (-1, 1)[verb == 'left'])
+            if axis_attrib.get('horizontal_flip', False):
+                print(slice_contours_path, 'horizontal_flip')
+                img = img.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+            if axis_attrib.get('vertical_flip', False):
+                print(slice_contours_path, 'vertical_flip')
+                img = img.transpose(PIL.Image.FLIP_TOP_BOTTOM)
+            #Compare the colors in the image and make a mask
+            colors = [x[1] for x in img.getcolors()]
+            img_arr = np.array(img)
+            img_w, img_h = img_size = img.size
+            img = None
+            white = white_mask.get(img_size)
+            if white is None:
+                white = white_mask[img_size] = np.array(
+                    PIL.Image.new('RGB', img_size, (255, 255, 255)))
+            info = {}
+            print(slice_contours_path, 'finding contours')
+            for color_i, color in enumerate(colors):
+                color_key = '{0}_{1}_{2}'.format(*color)
+                if color_key not in label_colors:
+                    #print(color, 'not in colors')
+                    continue
+                name = label_colors[color_key]
+                mask = (img_arr == color).all(-1)
+                masked_img = white * mask[..., None]
+                contours = measure.find_contours(masked_img.all(-1), 0.5)
+                #Transform the contours into the canvas space
+                for i in range(len(contours)):
+                    contour = contours[i]
+                    contour[:,0], contour[:,1] = (contour[:,1] / img_w - 0.5,
+                        (img_h - contour[:,0]) / img_h - 0.5)
+                    #Make the contours closed
+                    if not np.array_equal(contour[0], contour[-1]):
+                        contour = np.append(contour, contour[0])
+                    contours[i] = contour.tolist()
+                info[name] = contours
+                #show_image_and_contours(masked_img, contours)
+            print(slice_contours_path, 'writing...')
+            try:
+                with open(slice_contours_path, 'w') as f:
+                    f.write(json.dumps(info))
+                print('wrote', slice_contours_path)
+            except:
+                os.remove(slice_contours_path)
+                print('removed', slice_contours_path)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--pretty', action='store_true')
+    parser.add_argument('--subject', action='append', type=str)
+    parser.add_argument('--overwrite', action='store_true')
+    parser.add_argument('atlas_root', default='', nargs='?')
+    options = parser.parse_args()
+
+    get_subjects = options.subject
+    overwrite_files = options.overwrite
+
+    smda_config = configparser.ConfigParser()
+    smda_config.read('/opt/smda/web_server/smda_web_server.cfg')
+    atlas_root = options.atlas_root
+    if not atlas_root:
+        atlas_root = smda_config.get('atlas', 'root')
+    label_colors = {}
+    label_csv_path = os.path.join(THIS_DIR, 'labels_color_anatomy.csv')
+    with open(label_csv_path, 'r') as f:
+        reader = csv.reader(f)
+        lines = iter(reader)
+        header = next(lines)
+        # label number,r,g,b,name,abbreviation,anatomy
+        label = {}
+        for row in lines:
+            #print(', '.join(row))
+            name = row[4]
+            r = int(row[1])
+            g = int(row[2])
+            b = int(row[3])
+            label = {
+                'number': int(row[0]),
+                'r': r,
+                'g': g,
+                'b': b,
+                'name': name,
+                'abbreviation': row[5],
+                'anatomy': row[6],
+            }
+            label_colors['{0}_{1}_{2}'.format(r, g, b)] = name
+
+    if get_subjects:
+        subject_list = get_subjects
+    else:
+        subject_list = sorted(os.listdir(atlas_root))
+
+    for subject in subject_list:
+        subject_path = os.path.join(atlas_root, subject)
+        if not os.path.isdir(subject_path):
+            continue
+        subject_config_path = os.path.join(subject_path, 'config.yaml')
+        config = read_config(subject_config_path)
+        label_path = os.path.join(subject_path, 'labels')
+        if os.path.isdir(label_path):
+            get_label_data(label_colors, label_path, config,
+                overwrite_files=overwrite_files)
+    print('done')

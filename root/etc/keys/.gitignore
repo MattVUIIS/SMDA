@@ -1,0 +1,6 @@
+# Ignore everything in this directory
+*
+# Except this file
+!.gitignore
+# And the NOTE.txt
+!NOTE.txt
