@@ -75,8 +75,8 @@ WHERE s.subject_id = (%s)
 """
 
 QUERY_GET_MR_VOLUME_AXIS = """
-SELECT ma.axis, mva.image_w, mva.image_h, mva.min_slice, mva.max_slice, mva.attrib_id
-FROM "mr_volume_axis" mva NATURAL JOIN "mr_axis" ma
+SELECT a.axis, mva.image_w, mva.image_h, mva.min_slice, mva.max_slice, mva.attrib_id
+FROM "mr_volume_axis" mva NATURAL JOIN "axis" a
 WHERE mva.mr_session_id = (%s)
 """
 
@@ -87,8 +87,8 @@ WHERE s.subject_id = (%s)
 """
 
 QUERY_GET_LABEL_AXIS = """
-SELECT la.axis, lva.image_w, lva.image_h, lva.min_slice, lva.max_slice, lva.attrib_id
-FROM "label_axis" la NATURAL JOIN "label_volume_axis" lva
+SELECT a.axis, lva.image_w, lva.image_h, lva.min_slice, lva.max_slice, lva.attrib_id
+FROM "axis" a NATURAL JOIN "label_volume_axis" lva
 WHERE lva.label_mod_id = (%s)
 """
 
@@ -112,8 +112,8 @@ WHERE s.subject_id = (%s)
 """
 
 QUERY_GET_AGGREGATE_MR_VOLUME_AXIS = """
-SELECT ma.axis, amva.image_w, amva.image_h, amva.min_slice, amva.max_slice, amva.attrib_id
-FROM "aggregate_mr_volume_axis" amva NATURAL JOIN "mr_axis" ma
+SELECT a.axis, amva.image_w, amva.image_h, amva.min_slice, amva.max_slice, amva.attrib_id
+FROM "aggregate_mr_volume_axis" amva NATURAL JOIN "axis" a
 WHERE amva.amr_mod_id = (%s)
 """
 
@@ -130,64 +130,64 @@ WHERE s.ui_id = (%s) AND bs.slice = (%s)
 """
 
 QUERY_GET_HISTOLOGY_IMAGE_TEMPLATE = """
-SELECT hl.file_path_template
-FROM "histology_level" hl NATURAL JOIN "subject" s NATURAL JOIN "histology_stain" hs NATURAL JOIN "histology_modality" hm
-WHERE s.ui_id = (%s) AND hs.stain = (%s) AND hl.level = (%s)
+SELECT hs.file_path_template
+FROM "histology_slice" hs NATURAL JOIN "subject" s NATURAL JOIN "histology_stain" hst NATURAL JOIN "histology_modality" hmd
+WHERE s.ui_id = (%s) AND hst.stain = (%s) AND hs.slice = (%s)
 """
 
 QUERY_GET_HISTOLOGY_PREVIEW_TEMPLATE = """
-SELECT hl.preview_path_template
-FROM "histology_level" hl NATURAL JOIN "subject" s NATURAL JOIN "histology_stain" hs NATURAL JOIN "histology_modality" hm
-WHERE s.ui_id = (%s) AND hs.stain = (%s) AND hl.level = (%s)
+SELECT hs.preview_path_template
+FROM "histology_slice" hs NATURAL JOIN "subject" s NATURAL JOIN "histology_stain" hst NATURAL JOIN "histology_modality" hmd
+WHERE s.ui_id = (%s) AND hst.stain = (%s) AND hs.slice = (%s)
 """
 
 QUERY_GET_NO_VOLUME_MR_SLICE_PATH = """
 SELECT ms.file_path
 FROM "subject" s NATURAL JOIN "mr_modality" mm NATURAL JOIN "mr_type" mrt NATURAL JOIN "mr_session" mse
-NATURAL JOIN "mr_volume_axis" mva NATURAL JOIN "mr_axis" mra NATURAL JOIN "mr_slice" ms
+NATURAL JOIN "mr_volume_axis" mva NATURAL JOIN "axis" a NATURAL JOIN "mr_slice" ms
 WHERE s.ui_id = (%s) AND mrt.mr_type = (%s) AND mse.session = (%s) AND mse.invivo = (%s)
-AND mse.volume IS NULL AND mra.axis = (%s) AND ms.slice = (%s)
+AND mse.volume IS NULL AND a.axis = (%s) AND ms.slice = (%s)
 """
 
 QUERY_GET_VOLUME_MR_SLICE_PATH = """
 SELECT ms.file_path
 FROM "subject" s NATURAL JOIN "mr_modality" mm NATURAL JOIN "mr_type" mrt NATURAL JOIN "mr_session" mse
-NATURAL JOIN "mr_volume_axis" mva NATURAL JOIN "mr_axis" mra NATURAL JOIN "mr_slice" ms
+NATURAL JOIN "mr_volume_axis" mva NATURAL JOIN "axis" a NATURAL JOIN "mr_slice" ms
 WHERE s.ui_id = (%s) AND mrt.mr_type = (%s) AND mse.session = (%s) AND mse.invivo = (%s)
-AND mse.volume = (%s) AND mra.axis = (%s) AND ms.slice = (%s)
+AND mse.volume = (%s) AND a.axis = (%s) AND ms.slice = (%s)
 """
 
 QUERY_GET_LABEL_SLICE_PATH = """
 SELECT ls.file_path
 FROM "subject" s NATURAL JOIN "label_modality" lm NATURAL JOIN "label_type" lt
-NATURAL JOIN "label_volume_axis" lva NATURAL JOIN "label_axis" lax NATURAL JOIN "label_slice" ls
-WHERE s.ui_id = (%s) AND lt.label_type = (%s) AND lax.axis = (%s) AND ls.slice = (%s)
+NATURAL JOIN "label_volume_axis" lva NATURAL JOIN "axis" a NATURAL JOIN "label_slice" ls
+WHERE s.ui_id = (%s) AND lt.label_type = (%s) AND a.axis = (%s) AND ls.slice = (%s)
 """
 
 QUERY_GET_LABEL_CONTOUR_PATH = """
 SELECT ls.contour_file_path
 FROM "subject" s NATURAL JOIN "label_modality" lm NATURAL JOIN "label_type" lt
-NATURAL JOIN "label_volume_axis" lva NATURAL JOIN "label_axis" lax NATURAL JOIN "label_slice" ls
-WHERE s.ui_id = (%s) AND lt.label_type = (%s) AND lax.axis = (%s) AND ls.slice = (%s)
+NATURAL JOIN "label_volume_axis" lva NATURAL JOIN "axis" a NATURAL JOIN "label_slice" ls
+WHERE s.ui_id = (%s) AND lt.label_type = (%s) AND a.axis = (%s) AND ls.slice = (%s)
 """
 
 QUERY_GET_GLYPH_IMAGE_TEMPLATE = """
 SELECT gs.file_path_template
-FROM "glyph_session" gs NATURAL JOIN "subject" s NATURAL JOIN "glyph_type" gt NATURAL JOIN "glyph_modality" gm
-WHERE s.ui_id = (%s) AND gt.glyph_type = (%s) AND gs.session = (%s) AND gs.invivo = (%s)
+FROM "subject" s NATURAL JOIN "glyph_type" gt NATURAL JOIN "glyph_modality" gm NATURAL JOIN "glyph_session" gse NATURAL JOIN "glyph_slice" gs
+WHERE s.ui_id = (%s) AND gt.glyph_type = (%s) AND gse.session = (%s) AND gse.invivo = (%s) AND gs.slice = (%s)
 """
 
 QUERY_GET_GLYPH_IMAGE_PREVIEW_TEMPLATE = """
 SELECT gs.preview_path_template
-FROM "glyph_session" gs NATURAL JOIN "subject" s NATURAL JOIN "glyph_type" gt NATURAL JOIN "glyph_modality" gm
-WHERE s.ui_id = (%s) AND gt.glyph_type = (%s) AND gs.session = (%s) AND gs.invivo = (%s)
+FROM "subject" s NATURAL JOIN "glyph_type" gt NATURAL JOIN "glyph_modality" gm NATURAL JOIN "glyph_session" gse NATURAL JOIN "glyph_slice" gs
+WHERE s.ui_id = (%s) AND gt.glyph_type = (%s) AND gse.session = (%s) AND gse.invivo = (%s) AND gs.slice = (%s)
 """
 
 QUERY_GET_AGGREGATE_MR_SLICE_PATH = """
 SELECT ams.file_path
 FROM "subject" s NATURAL JOIN "aggregate_mr_modality" amm NATURAL JOIN "aggregate_mr_type" amt
-NATURAL JOIN "aggregate_mr_volume_axis" amva NATURAL JOIN "mr_axis" mra NATURAL JOIN "aggregate_mr_slice" ams
-WHERE s.ui_id = (%s) AND amt.amr_type = (%s) AND mra.axis = (%s) AND ams.slice = (%s)
+NATURAL JOIN "aggregate_mr_volume_axis" amva NATURAL JOIN "axis" a NATURAL JOIN "aggregate_mr_slice" ams
+WHERE s.ui_id = (%s) AND amt.amr_type = (%s) AND a.axis = (%s) AND ams.slice = (%s)
 """
 
 def _get_attrib(db_conn, attrib_id):
@@ -491,13 +491,12 @@ def get_hist_image_path(ui_id, stain, slice_i, level, row, col):
     img_path = None
     with psycopg2.connect(connect_str) as db_conn:
         c = db_conn.cursor()
-        c.execute(QUERY_GET_HISTOLOGY_IMAGE_TEMPLATE, (ui_id, stain, level))
+        c.execute(QUERY_GET_HISTOLOGY_IMAGE_TEMPLATE, (ui_id, stain, slice_i))
         if c.rowcount:
             file_path_template = c.fetchone()[0]
             logger.debug('hist image: got file_path_template: {0}'.format(
                 file_path_template))
-            img_path = file_path_template.format(slice=slice_i, level=level,
-                row=row, col=col)
+            img_path = file_path_template.format(level=level, row=row, col=col)
             logger.debug('hist image: got img_path: {0}'.format(img_path))
     return _check_image_path(img_path)
 
@@ -506,12 +505,12 @@ def get_hist_image_preview_path(ui_id, stain, slice_i, level):
     img_path = None
     with psycopg2.connect(connect_str) as db_conn:
         c = db_conn.cursor()
-        c.execute(QUERY_GET_HISTOLOGY_PREVIEW_TEMPLATE, (ui_id, stain, level))
+        c.execute(QUERY_GET_HISTOLOGY_PREVIEW_TEMPLATE, (ui_id, stain, slice_i))
         if c.rowcount:
             preview_path_template = c.fetchone()[0]
             logger.debug('hist preview: got preview_path_template: {0}'.format(
                 preview_path_template))
-            img_path = preview_path_template.format(slice=slice_i, level=level)
+            img_path = preview_path_template.format(level=level)
             logger.debug('hist preview: got img_path: {0}'.format(img_path))
     return _check_image_path(img_path)
 
@@ -569,10 +568,10 @@ def get_glyph_image_path(ui_id, glyph_type, vivo, session, slice_i, row, col):
         c = db_conn.cursor()
         invivo = 1 if vivo == 'invivo' else 0
         c.execute(QUERY_GET_GLYPH_IMAGE_TEMPLATE, (ui_id, glyph_type,
-            session, invivo))
+            session, invivo, slice_i))
         if c.rowcount:
             file_path_template = c.fetchone()[0]
-            img_path = file_path_template.format(slice=slice_i, row=row, col=col)
+            img_path = file_path_template.format(row=row, col=col)
     return _check_image_path(img_path)
 
 def get_glyph_image_preview_path(ui_id, glyph_type, vivo, session, slice_i, row, col):
@@ -581,10 +580,10 @@ def get_glyph_image_preview_path(ui_id, glyph_type, vivo, session, slice_i, row,
         c = db_conn.cursor()
         invivo = 1 if vivo == 'invivo' else 0
         c.execute(QUERY_GET_GLYPH_IMAGE_PREVIEW_TEMPLATE, (ui_id,
-            glyph_type, session, invivo))
+            glyph_type, session, invivo, slice_i))
         if c.rowcount:
             preview_path_template = c.fetchone()[0]
-            img_path = preview_path_template.format(slice=slice_i, row=row, col=col)
+            img_path = preview_path_template
     return _check_image_path(img_path)
 
 def get_aggregate_mr_image_path(ui_id, proc, axis, slice_i):

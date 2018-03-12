@@ -75,32 +75,34 @@ class CollectionInfo:
     def __repr__(self):
         return repr(self.__dict__)
 
-    def reverse_paths(self):
-        names = list(self.paths.keys())
-        paths = list(self.paths.values())
-        for name, path in zip(names, reversed(paths)):
-            self.paths[name] = path
-
+    def reverse_paths(self, start_range, end_range):
+        items = list(self.paths.items())
+        def reflect(v):
+            return end_range - v + start_range
+        self.min_item, self.max_item = reflect(self.max_item), reflect(self.min_item)
+        for item in items:
+            name, path = item
+            self.paths[reflect(name)] = path
 
 QUERY_RECREATE_DB = """
 DROP TABLE IF EXISTS "aggregate_mr_slice";
 DROP TABLE IF EXISTS "aggregate_mr_volume_axis";
 DROP TABLE IF EXISTS "aggregate_mr_modality";
 DROP TABLE IF EXISTS "aggregate_mr_type";
+DROP TABLE IF EXISTS "glyph_slice";
 DROP TABLE IF EXISTS "glyph_session";
 DROP TABLE IF EXISTS "glyph_modality";
 DROP TABLE IF EXISTS "glyph_type";
 DROP TABLE IF EXISTS "label_slice";
 DROP TABLE IF EXISTS "label_volume_axis";
-DROP TABLE IF EXISTS "label_axis";
 DROP TABLE IF EXISTS "label_modality";
 DROP TABLE IF EXISTS "label_type";
 DROP TABLE IF EXISTS "mr_slice";
 DROP TABLE IF EXISTS "mr_volume_axis";
-DROP TABLE IF EXISTS "mr_axis";
 DROP TABLE IF EXISTS "mr_session";
 DROP TABLE IF EXISTS "mr_modality";
 DROP TABLE IF EXISTS "mr_type";
+DROP TABLE IF EXISTS "histology_slice";
 DROP TABLE IF EXISTS "histology_level";
 DROP TABLE IF EXISTS "histology_modality";
 DROP TABLE IF EXISTS "histology_stain";
@@ -109,6 +111,8 @@ DROP TABLE IF EXISTS "block_modality";
 DROP TABLE IF EXISTS "modality_attributes";
 DROP TABLE IF EXISTS "modality";
 DROP TABLE IF EXISTS "subject_meta";
+DROP TABLE IF EXISTS "subject_volume_axis";
+DROP TABLE IF EXISTS "axis";
 DROP TABLE IF EXISTS "subject";
 
 CREATE TABLE "subject" (
@@ -119,6 +123,24 @@ CREATE TABLE "subject" (
     unique (subject),
     unique (display_name),
     unique (ui_id)
+);
+
+CREATE TABLE "axis" (
+    axis_id SERIAL PRIMARY KEY,
+    axis TEXT NOT NULL,
+    unique(axis)
+);
+
+CREATE TABLE "subject_volume_axis" (
+    subject_id BIGINT NOT NULL,
+    axis_id INT NOT NULL,
+    start_range INT NOT NULL,
+    end_range INT NOT NULL,
+    FOREIGN KEY (subject_id) REFERENCES "subject" (subject_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (axis_id) REFERENCES "axis" (axis_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    unique(subject_id, axis_id)
 );
 
 CREATE TABLE "subject_meta" (
@@ -201,11 +223,20 @@ CREATE TABLE "histology_level" (
     max_row INT NOT NULL,
     min_col INT NOT NULL,
     max_col INT NOT NULL,
+    FOREIGN KEY (hist_mod_id) REFERENCES "histology_modality" (hist_mod_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    unique(hist_mod_id, level)
+);
+
+CREATE TABLE "histology_slice" (
+    hist_slice_id BIGSERIAL PRIMARY KEY,
+    hist_mod_id BIGINT NOT NULL,
+    slice INT NOT NULL,
     file_path_template TEXT NULL,
     preview_path_template TEXT NULL,
     FOREIGN KEY (hist_mod_id) REFERENCES "histology_modality" (hist_mod_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
-    unique(hist_mod_id, level)
+    unique(hist_mod_id, slice)
 );
 
 CREATE TABLE "mr_type" (
@@ -238,16 +269,10 @@ CREATE TABLE "mr_session" (
     unique(mr_mod_id, session, invivo, volume)
 );
 
-CREATE TABLE "mr_axis" (
-    mr_axis_id SERIAL PRIMARY KEY,
-    axis TEXT NOT NULL,
-    unique(axis)
-);
-
 CREATE TABLE "mr_volume_axis" (
     mr_vol_axis_id BIGSERIAL PRIMARY KEY,
     mr_session_id BIGINT NOT NULL,
-    mr_axis_id INT NOT NULL,
+    axis_id INT NOT NULL,
     image_w INT NOT NULL,
     image_h INT NOT NULL,
     min_slice INT NOT NULL,
@@ -255,11 +280,11 @@ CREATE TABLE "mr_volume_axis" (
     attrib_id BIGINT NULL,
     FOREIGN KEY (mr_session_id) REFERENCES "mr_session" (mr_session_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
-    FOREIGN KEY (mr_axis_id) REFERENCES "mr_axis" (mr_axis_id)
+    FOREIGN KEY (axis_id) REFERENCES "axis" (axis_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (attrib_id) REFERENCES "modality_attributes" (attrib_id)
         ON UPDATE CASCADE ON DELETE SET NULL,
-    unique(mr_session_id, mr_axis_id)
+    unique(mr_session_id, axis_id)
 );
 
 CREATE TABLE "mr_slice" (
@@ -289,16 +314,10 @@ CREATE TABLE "label_modality" (
     unique (subject_id, label_type_id)
 );
 
-CREATE TABLE "label_axis" (
-    label_axis_id SERIAL PRIMARY KEY,
-    axis TEXT NOT NULL,
-    unique(axis)
-);
-
 CREATE TABLE "label_volume_axis" (
     label_vol_axis_id BIGSERIAL PRIMARY KEY,
     label_mod_id BIGINT NOT NULL,
-    label_axis_id INT NOT NULL,
+    axis_id INT NOT NULL,
     image_w INT NOT NULL,
     image_h INT NOT NULL,
     min_slice INT NOT NULL,
@@ -306,11 +325,11 @@ CREATE TABLE "label_volume_axis" (
     attrib_id BIGINT NULL,
     FOREIGN KEY (label_mod_id) REFERENCES "label_modality" (label_mod_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
-    FOREIGN KEY (label_axis_id) REFERENCES "label_axis" (label_axis_id)
+    FOREIGN KEY (axis_id) REFERENCES "axis" (axis_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (attrib_id) REFERENCES "modality_attributes" (attrib_id)
         ON UPDATE CASCADE ON DELETE SET NULL,
-    unique(label_mod_id, label_axis_id)
+    unique(label_mod_id, axis_id)
 );
 
 CREATE TABLE "label_slice" (
@@ -355,14 +374,23 @@ CREATE TABLE "glyph_session" (
     max_row INT NOT NULL,
     min_col INT NOT NULL,
     max_col INT NOT NULL,
-    file_path_template TEXT NULL,
-    preview_path_template TEXT NULL,
     attrib_id BIGINT NULL,
     FOREIGN KEY (glyph_mod_id) REFERENCES "glyph_modality" (glyph_mod_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (attrib_id) REFERENCES "modality_attributes" (attrib_id)
         ON UPDATE CASCADE ON DELETE SET NULL,
     unique(glyph_mod_id, session, invivo)
+);
+
+CREATE TABLE "glyph_slice" (
+    glyph_slice_id BIGSERIAL PRIMARY KEY,
+    glyph_session_id BIGINT NOT NULL,
+    slice INT NOT NULL,
+    file_path_template TEXT NULL,
+    preview_path_template TEXT NULL,
+    FOREIGN KEY (glyph_session_id) REFERENCES "glyph_session" (glyph_session_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    unique(glyph_session_id, slice)
 );
 
 CREATE TABLE "aggregate_mr_type" (
@@ -385,7 +413,7 @@ CREATE TABLE "aggregate_mr_modality" (
 CREATE TABLE "aggregate_mr_volume_axis" (
     amr_vol_axis_id BIGSERIAL PRIMARY KEY,
     amr_mod_id BIGINT NOT NULL,
-    mr_axis_id INT NOT NULL,
+    axis_id INT NOT NULL,
     image_w INT NOT NULL,
     image_h INT NOT NULL,
     min_slice INT NOT NULL,
@@ -393,11 +421,11 @@ CREATE TABLE "aggregate_mr_volume_axis" (
     attrib_id BIGINT NULL,
     FOREIGN KEY (amr_mod_id) REFERENCES "aggregate_mr_modality" (amr_mod_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
-    FOREIGN KEY (mr_axis_id) REFERENCES "mr_axis" (mr_axis_id)
+    FOREIGN KEY (axis_id) REFERENCES "axis" (axis_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (attrib_id) REFERENCES "modality_attributes" (attrib_id)
         ON UPDATE CASCADE ON DELETE SET NULL,
-    unique(amr_mod_id, mr_axis_id)
+    unique(amr_mod_id, axis_id)
 );
 
 CREATE TABLE "aggregate_mr_slice" (
@@ -438,27 +466,24 @@ VALUES ('brainmask'), ('pd-template'), ('t1-template'), ('t2-template'),
 RETURNING amr_type, amr_type_id
 """
 
-QUERY_INSERT_MR_AXIS = """
-INSERT INTO "mr_axis" (axis)
-VALUES ('axial'), ('coronal'), ('sagittal')
-RETURNING axis, mr_axis_id;
-"""
-
-QUERY_INSERT_LABEL_AXIS = """
-INSERT INTO "label_axis" (axis)
-VALUES ('axial'), ('coronal'), ('sagittal')
-RETURNING axis, label_axis_id;
-"""
-
 QUERY_INSERT_GLYPH_TYPES = """
 INSERT INTO "glyph_type" (glyph_type)
-VALUES ('CSD'), ('DTI')
-RETURNING glyph_type, glyph_type_id
+VALUES ('CSD'), ('DTI') RETURNING glyph_type, glyph_type_id
 """
 
 QUERY_INSERT_SUBJECT = """
 INSERT INTO "subject" (subject, display_name)
 VALUES (%s, %s) RETURNING subject_id, ui_id
+"""
+
+QUERY_INSERT_AXIS = """
+INSERT INTO "axis" (axis)
+VALUES ('axial'), ('coronal'), ('sagittal') RETURNING axis, axis_id;
+"""
+
+QUERY_INSERT_SUBJECT_VOLUME_AXIS = """
+INSERT INTO "subject_volume_axis" (subject_id, axis_id, start_range, end_range)
+VALUES (%s, %s, %s, %s)
 """
 
 QUERY_INSERT_DEFAULT_SUBJECT = """
@@ -487,15 +512,13 @@ VALUES (%s, %s, %s, %s, %s, %s) RETURNING hist_mod_id
 """
 
 QUERY_INSERT_HISTOLOGY_LEVEL = """
-INSERT INTO "histology_level" (hist_mod_id, level, image_w, image_h, min_row, max_row,
-min_col, max_col, file_path_template, preview_path_template)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-RETURNING hist_level_id
+INSERT INTO "histology_level" (hist_mod_id, level, image_w, image_h, min_row, max_row, min_col, max_col)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING hist_level_id
 """
 
-QUERY_INSERT_HISTOLOGY_IMAGE = """
-INSERT INTO "histology_image" (hist_level_id, slice, row, col, file_path)
-VALUES %s RETURNING hist_img_id
+QUERY_INSERT_HISTOLOGY_SLICE = """
+INSERT INTO "histology_slice" (hist_mod_id, slice, file_path_template, preview_path_template)
+VALUES %s RETURNING hist_slice_id
 """
 
 QUERY_INSERT_MR_MODALITY = """
@@ -509,7 +532,7 @@ VALUES (%s, %s, %s, %s) RETURNING mr_session_id
 """
 
 QUERY_INSERT_MR_VOLUME_AXIS = """
-INSERT INTO "mr_volume_axis" (mr_session_id, mr_axis_id, image_w, image_h, min_slice, max_slice, attrib_id)
+INSERT INTO "mr_volume_axis" (mr_session_id, axis_id, image_w, image_h, min_slice, max_slice, attrib_id)
 VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING mr_vol_axis_id
 """
 
@@ -520,18 +543,16 @@ VALUES %s RETURNING mr_slice_id
 
 QUERY_INSERT_LABEL_TYPES = """
 INSERT INTO "label_type" (label_type)
-VALUES ('roi'), ('BDAcount'), ('MR')
-RETURNING label_type, label_type_id
+VALUES ('roi'), ('BDAcount'), ('MR') RETURNING label_type, label_type_id
 """
 
 QUERY_INSERT_LABEL_MODALITY = """
 INSERT INTO "label_modality" (subject_id, label_type_id)
-VALUES (%s, %s)
-RETURNING label_mod_id
+VALUES (%s, %s) RETURNING label_mod_id
 """
 
 QUERY_INSERT_LABEL_VOLUME_AXIS = """
-INSERT INTO "label_volume_axis" (label_mod_id, label_axis_id, image_w, image_h, min_slice, max_slice, attrib_id)
+INSERT INTO "label_volume_axis" (label_mod_id, axis_id, image_w, image_h, min_slice, max_slice, attrib_id)
 VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING label_vol_axis_id
 """
 
@@ -545,10 +566,15 @@ INSERT INTO "glyph_modality" (subject_id, glyph_type_id)
 VALUES (%s, %s) RETURNING glyph_mod_id
 """
 
-QUERY_INSERT_GLPYH_SESSION = """
+QUERY_INSERT_GLYPH_SESSION = """
 INSERT INTO "glyph_session" (glyph_mod_id, session, invivo, min_slice, max_slice, image_w, image_h,
-min_row, max_row, min_col, max_col, file_path_template, preview_path_template, attrib_id)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING glyph_session_id
+min_row, max_row, min_col, max_col, attrib_id)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING glyph_session_id
+"""
+
+QUERY_INSERT_GLYPH_SLICE = """
+INSERT INTO "glyph_slice" (glyph_session_id, slice, file_path_template, preview_path_template)
+VALUES %s RETURNING glyph_slice_id
 """
 
 QUERY_INSERT_AGGREGATE_MR_MODALITY = """
@@ -557,7 +583,7 @@ VALUES (%s, %s) RETURNING amr_mod_id
 """
 
 QUERY_INSERT_AGGREGATE_MR_VOLUME_AXIS = """
-INSERT INTO "aggregate_mr_volume_axis" (amr_mod_id, mr_axis_id, image_w, image_h, min_slice, max_slice, attrib_id)
+INSERT INTO "aggregate_mr_volume_axis" (amr_mod_id, axis_id, image_w, image_h, min_slice, max_slice, attrib_id)
 VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING amr_vol_axis_id
 """
 
@@ -566,23 +592,25 @@ INSERT INTO "aggregate_mr_slice" (amr_vol_axis_id, slice, file_path)
 VALUES %s RETURNING amr_slice_id
 """
 
+SUBJECTS = {}
+
 MODALITIES = {}
 
 HIST_STAINS = {}
 
 MR_TYPES = {}
 
-MR_AXIS = {}
+AXIS = {}
 
 LABEL_TYPES = {}
-
-LABEL_AXIS = {}
 
 GLYPH_TYPES = {}
 
 AGGREGATE_MR_TYPES = {}
 
 PAGE_SIZE = 1000
+
+AXIS_NAMES = ('coronal', 'axial', 'sagittal')
 
 def validate_rotate(val):
     m = re.search('(\w+) (\d+)', val)
@@ -626,7 +654,10 @@ def get_meta_data(root_path):
     if not database_password:
         db_config = configparser.ConfigParser()
         db_config.read('/opt/smda/smda-db.cfg')
-        connect_str = db_config.get('database', 'connect_str')
+        try:
+            connect_str = db_config.get('database', 'connect_str')
+        except configparser.NoSectionError:
+            connect_str = None
         if connect_str:
             m = re.search('password=(.*)', connect_str)
             if m:
@@ -644,12 +675,10 @@ def get_meta_data(root_path):
         HIST_STAINS.update(c.fetchall())
         c.execute(QUERY_INSERT_MR_TYPES)
         MR_TYPES.update((x[0], x[1:]) for x in c.fetchall())
-        c.execute(QUERY_INSERT_MR_AXIS)
-        MR_AXIS.update(c.fetchall())
+        c.execute(QUERY_INSERT_AXIS)
+        AXIS.update(c.fetchall())
         c.execute(QUERY_INSERT_LABEL_TYPES)
         LABEL_TYPES.update((x[0], x[1:]) for x in c.fetchall())
-        c.execute(QUERY_INSERT_LABEL_AXIS)
-        LABEL_AXIS.update(c.fetchall())
         c.execute(QUERY_INSERT_GLYPH_TYPES)
         GLYPH_TYPES.update((x[0], x[1]) for x in c.fetchall())
         c.execute(QUERY_INSERT_AGGREGATE_MR_TYPES)
@@ -659,40 +688,62 @@ def get_meta_data(root_path):
         else:
             subject_list = sorted(os.listdir(root_path))
         #print('subject list: ', subject_list)
-        subjects = {}
-        for subject in subject_list:
-            path = os.path.join(root_path, subject)
+        for subject_name in subject_list:
+            path = os.path.join(root_path, subject_name)
             if not os.path.isdir(path):
                 continue
             subject_config_path = os.path.join(path, 'config.yaml')
             config = read_config(subject_config_path)
-            display_name = config.get('display_name', subject)
-            print('subject', subject)
+            display_name = config.get('display_name', subject_name)
+            print('subject', subject_name)
             print('display name', display_name)
-            c.execute(QUERY_INSERT_SUBJECT, (subject, display_name))
+            c.execute(QUERY_INSERT_SUBJECT, (subject_name, display_name))
             subject_id, ui_id = c.fetchone()
-            subjects[subject] = {
-                'subject': subject,
+            volume_info = config.get('volume', {})
+            volume = {}
+            for axis in AXIS_NAMES:
+                axis_range = volume_info.get(axis)
+                if axis_range:
+                    start, end = axis_range.split('-')
+                    start = int(start)
+                    end = int(end)
+                else:  # Assume standard range
+                    start = 1
+                    end = 256
+                volume[axis] = (start, end)
+                c.execute(QUERY_INSERT_SUBJECT_VOLUME_AXIS, (subject_id,
+                    AXIS[axis], start, end))
+            subject = SUBJECTS[subject_id] = {
+                'subject': subject_name,
                 'display_name': display_name,
                 'id': subject_id,
                 'ui_id': ui_id,
+                'volume': volume,
             }
-            get_modalities(db_conn, subject_id, path, config)
+            get_modalities(db_conn, subject, path, config)
             if cache:
                 cache.delete('subject_info[{0}]'.format(ui_id))
         print('subjects:')
-        pprint.pprint(subjects)
-        if subjects:
-            first_subject = list(subjects.keys())[0]
-            default_subject = subjects.get(meta_config.get('default_subject'),
-                subjects[next(iter(subjects.keys()))])
+        pprint.pprint(SUBJECTS)
+        if SUBJECTS:
+            #The default subject is the one specified in the configuration
+            #If not found in the configuration, then it is the first subject
+            default_subject = None
+            config_default = meta_config.get('default_subject')
+            if config_default:
+                for subject_id, subject in SUBJECTS.items():
+                    if subject['subject'] == config_default:
+                        default_subject = subject
+                        break
+            if not default_subject:
+                default_subject = SUBJECTS[next(iter(SUBJECTS.keys()))]
             ui_id = default_subject.get('ui_id', None)
             if ui_id:
                 c.execute(QUERY_INSERT_DEFAULT_SUBJECT, (ui_id,))
                 print('set default subject to', default_subject['subject'])
     return None
 
-def get_modalities(db_conn, subject_id, subject_path, config):
+def get_modalities(db_conn, subject, subject_path, config):
     modality_table = {
         'block': ('block', get_block_data),
         'hist': ('hist', get_hist_data),
@@ -727,7 +778,7 @@ def get_modalities(db_conn, subject_id, subject_path, config):
         #print('modality: ', modality)
         rule = modality_table.get(modality)
         if rule and modality in modality_list:
-            rule[1](db_conn, subject_id, path, config)
+            rule[1](db_conn, subject, path, config)
     return None
 
 def _get_collection_info(root, item, path_template=None):
@@ -831,17 +882,18 @@ def _insert_attribute_row(db_conn, attributes, namespace=None):
         attrib_id = c.fetchone()[0]
     return attrib_id
 
-def get_block_data(db_conn, subject_id, block_path, config):
+def get_block_data(db_conn, subject, block_path, config):
     print('block_path:', block_path)
     cllt = _get_collection_info(block_path, 'slice')
     block_config = config.get('block', {})
+    start_range, end_range = subject['volume']['coronal']
     if block_config.get('reverse_slices', False):
         print('reversing block slices')
-        cllt.reverse_paths()
+        cllt.reverse_paths(start_range, end_range)
     attrib = _check_attributes(block_config.get('attrib'), block_path)
     attrib_id = _insert_attribute_row(db_conn, attrib)
     c = db_conn.cursor()
-    c.execute(QUERY_INSERT_BLOCK_MODALITY, (subject_id, cllt.image_w,
+    c.execute(QUERY_INSERT_BLOCK_MODALITY, (subject['id'], cllt.image_w,
         cllt.image_h, cllt.min_item, cllt.max_item, attrib_id))
     block_mod_id = c.fetchone()[0]
     images = []
@@ -851,38 +903,40 @@ def get_block_data(db_conn, subject_id, block_path, config):
     psycopg2.extras.execute_values(c, QUERY_INSERT_BLOCK_SLICE,
         images, page_size=PAGE_SIZE)
 
-def get_hist_data(db_conn, subject_id, hist_path, config):
+def get_hist_data(db_conn, subject, hist_path, config):
     for stain in os.listdir(hist_path):
         path = os.path.join(hist_path, stain)
         if stain in HIST_STAINS:
             hist_config = config.get('hist', {}).get(stain, {})
             if not hist_config.get('skip', False):
                 hist_stain_id = HIST_STAINS[stain]
-                get_hist_stain(db_conn, subject_id, hist_stain_id, path,
+                get_hist_stain(db_conn, subject, hist_stain_id, path,
                     hist_config, stain)
 
-def get_hist_stain(db_conn, subject_id, hist_stain_id, hist_stain_path,
+def get_hist_stain(db_conn, subject, hist_stain_id, hist_stain_path,
         hist_config, stain):
     print('hist_stain_path:', hist_stain_path)
     #We use the first slice, first level, and first row to
     #summarize the rest of the histology
-    #Get the slice information
+    #Get the slice information    
     c = db_conn.cursor()
     slice_cllt = _get_collection_info(hist_stain_path, 'slice')
+    #slice_cllt.path_template = slice_cllt.path_template()
     if slice_cllt.min_item is None or slice_cllt.max_item is None:
         return None
+    start_range, end_range = subject['volume']['coronal']
+    path_sl_range = list(range(start_range, end_range + 1))
     if hist_config.get('reverse_slices', False):
         print('reversing', stain, 'histology slices')
-        slice_cllt.reverse_paths()
+        path_sl_range = list(reversed(path_sl_range))
     #print('min_slice:', min_slice, 'max_slice', max_slice)
     min_slice = int(slice_cllt.min_item)
     max_slice = int(slice_cllt.max_item)
     slice_holes = slice_cllt.holes
     attrib = _check_attributes(hist_config.get('attrib'), hist_stain_path)
     attrib_id = _insert_attribute_row(db_conn, attrib)
-    c.execute(QUERY_INSERT_HISTOLOGY_MODALITY, (subject_id, hist_stain_id,
-        HIST_MAGNIFICATION_FACTOR, min_slice, max_slice,
-        attrib_id))
+    c.execute(QUERY_INSERT_HISTOLOGY_MODALITY, (subject['id'], hist_stain_id,
+        HIST_MAGNIFICATION_FACTOR, min_slice, max_slice, attrib_id))
     hist_mod_id = c.fetchone()[0]
     slice_path = os.path.join(atlas_root, slice_cllt.paths[min_slice])
     #print('slice_path:', slice_path)
@@ -900,8 +954,6 @@ def get_hist_stain(db_conn, subject_id, hist_stain_id, hist_stain_path,
             continue
         #print('level:', level)
         level_path = os.path.join(atlas_root, level_path)
-        preview_path_template = os.path.join(level_cllt.path_template,
-            'preview.png')
         #print('level_path:', level_path)
         #Get the row info from the level
         row_cllt = _get_collection_info(level_path, 'row',
@@ -932,9 +984,17 @@ def get_hist_stain(db_conn, subject_id, hist_stain_id, hist_stain_path,
                 image_h = col_cllt.image_h
         #Insert level information
         c.execute(QUERY_INSERT_HISTOLOGY_LEVEL, (hist_mod_id, level,
-            image_w, image_h, min_row, max_row, min_col, max_col,
-            col_cllt.path_template, preview_path_template))
-        hist_level_id = c.fetchone()[0]
+            image_w, image_h, min_row, max_row, min_col, max_col))
+    images = []
+    for sl, path_sl in zip(range(start_range, end_range + 1), path_sl_range):
+        if path_sl in slice_cllt.paths:
+            images.append((hist_mod_id, sl,
+                os.path.join(slice_cllt.path_template.format(slice=path_sl),
+                    'level_{level}', 'row_{row}', 'col_{col}.png'),
+                os.path.join(slice_cllt.path_template.format(slice=path_sl),
+                    'level_{level}', 'preview.png')))
+    psycopg2.extras.execute_values(c, QUERY_INSERT_HISTOLOGY_SLICE,
+        images, page_size=PAGE_SIZE)
 
 def _convert_dict_to_ordered_list(d):
     L = []
@@ -944,13 +1004,13 @@ def _convert_dict_to_ordered_list(d):
 
 def _get_axis_collection_info(slice_path):
     info = {}
-    for axis in ('axial', 'coronal', 'sagittal'):
+    for axis in AXIS_NAMES:
         axis_path = os.path.join(slice_path, axis)
         print('axis_path:', axis_path)
         info[axis] = _get_collection_info(axis_path, 'slice')
     return info
 
-def get_mr_data(db_conn, subject_id, mr_path, config):
+def get_mr_data(db_conn, subject, mr_path, config):
     mr_mod_info = {}
     c = db_conn.cursor()
     print('mr_path:', mr_path)
@@ -972,9 +1032,9 @@ def get_mr_data(db_conn, subject_id, mr_path, config):
             if mr_type_id in mr_mod_info:
                 mr_mod_id = mr_mod_info[mr_type_id]
             else:
-                c.execute(QUERY_INSERT_MR_MODALITY, (subject_id, mr_type_id))
+                c.execute(QUERY_INSERT_MR_MODALITY, (subject['id'], mr_type_id))
                 mr_mod_info[mr_type_id] = mr_mod_id = c.fetchone()[0]
-            get_mr_axis_data(db_conn, mr_mod_id, vivo, session, None,
+            get_mr_axis_data(db_conn, subject, mr_mod_id, vivo, session, None,
                 axis_info, mr_config, slice_path, 'T2')
         elif contrast == 'DTI':
             #Get the processes
@@ -993,11 +1053,11 @@ def get_mr_data(db_conn, subject_id, mr_path, config):
                 if mr_type_id in mr_mod_info:
                     mr_mod_id = mr_mod_info[mr_type_id]
                 else:
-                    c.execute(QUERY_INSERT_MR_MODALITY, (subject_id,
+                    c.execute(QUERY_INSERT_MR_MODALITY, (subject['id'],
                         mr_type_id))
                     mr_mod_info[mr_type_id] = mr_mod_id = c.fetchone()[0]
                 subfiles = os.listdir(type_path)
-                if 'axial' in subfiles or 'coronal' in subfiles or 'sagittal' in subfiles:
+                if any(axis in subfiles for axis in AXIS_NAMES):
                     has_volumes = 0
                     if expect_volumes:
                         print('expected volume folders in path {0}'.format(type_path),
@@ -1019,14 +1079,14 @@ def get_mr_data(db_conn, subject_id, mr_path, config):
                     for volume in subfiles:
                         volume_path = os.path.join(type_path, volume)
                         axis_info = _get_axis_collection_info(volume_path)
-                        get_mr_axis_data(db_conn, mr_mod_id, vivo, session,
+                        get_mr_axis_data(db_conn, subject, mr_mod_id, vivo, session,
                             volume, axis_info, mr_config, volume_path, mr_type_name)
                 else:
                     axis_info = _get_axis_collection_info(type_path)
-                    get_mr_axis_data(db_conn, mr_mod_id, vivo, session, None,
+                    get_mr_axis_data(db_conn, subject, mr_mod_id, vivo, session, None,
                         axis_info, mr_config, type_path, mr_type_name)
 
-def get_mr_axis_data(db_conn, mr_mod_id, vivo, session, volume, axis_info,
+def get_mr_axis_data(db_conn, subject, mr_mod_id, vivo, session, volume, axis_info,
         mr_config, namespace, mr_type_name):
     c = db_conn.cursor()
     invivo = 1 if vivo == 'invivo' else 0
@@ -1037,7 +1097,7 @@ def get_mr_axis_data(db_conn, mr_mod_id, vivo, session, volume, axis_info,
     if attrib:
         print(amr_type_name, 'attrib', attrib)
     for axis, axis_cllt in axis_info.items():
-        mr_axis_id = MR_AXIS[axis]
+        axis_id = AXIS[axis]
         image_w = axis_cllt.image_w
         image_h = axis_cllt.image_h
         min_slice = int(axis_cllt.min_item)
@@ -1046,49 +1106,51 @@ def get_mr_axis_data(db_conn, mr_mod_id, vivo, session, volume, axis_info,
         axis_attrib = _check_attributes(attrib.get(axis),
             os.path.join(namespace, axis))
         attrib_id = _insert_attribute_row(db_conn, axis_attrib)
-        c.execute(QUERY_INSERT_MR_VOLUME_AXIS, (mr_session_id, mr_axis_id,
+        c.execute(QUERY_INSERT_MR_VOLUME_AXIS, (mr_session_id, axis_id,
             image_w, image_h, min_slice, max_slice, attrib_id))
         mr_vol_axis_id = c.fetchone()[0]
         #print(axis, 'mr_vol_axis_id', mr_vol_axis_id)
         slices.extend((mr_vol_axis_id, sl, None)
             for sl in axis_cllt.holes)
+        start_range, end_range = subject['volume'][axis]
         if axis in mr_config.get('reverse_slices', []):
             print('reversing', mr_type_name, axis, 'slices')
-            axis_cllt.reverse_paths()
+            axis_cllt.reverse_paths(start_range, end_range)
         slices.extend((mr_vol_axis_id, sl, img_path)
             for sl, img_path in axis_cllt.paths.items())
     psycopg2.extras.execute_values(c, QUERY_INSERT_MR_SLICE,
         slices, page_size=PAGE_SIZE)
 
-def get_label_data(db_conn, subject_id, label_path, config):
+def get_label_data(db_conn, subject, label_path, config):
     for label_type in os.listdir(label_path):
         path = os.path.join(label_path, label_type)
         if label_type in LABEL_TYPES:
             label_config = config.get('labels', {}).get(label_type, {})
             if not label_config.get('skip', False):
                 label_type_id = LABEL_TYPES[label_type]
-                get_label_type(db_conn, subject_id, label_type_id, path,
+                get_label_type(db_conn, subject, label_type_id, path,
                     label_config, label_type)
 
-def get_label_type(db_conn, subject_id, label_type_id, label_path,
+def get_label_type(db_conn, subject, label_type_id, label_path,
         label_config, label_type):
     print('label_path:', label_path)
     axis_info = _get_axis_collection_info(label_path)
     #pprint.pprint(axis_info)
     c = db_conn.cursor()
-    c.execute(QUERY_INSERT_LABEL_MODALITY, (subject_id, label_type_id))
+    c.execute(QUERY_INSERT_LABEL_MODALITY, (subject['id'], label_type_id))
     label_mod_id = c.fetchone()[0]
     slices = []
     attrib = label_config.get('attrib', {})
     if attrib:
         print(label_type, 'attrib', attrib)
     for axis, axis_cllt in axis_info.items():
-        label_axis_id = LABEL_AXIS[axis]
+        axis_id = AXIS[axis]
         image_w = axis_cllt.image_w
         image_h = axis_cllt.image_h
+        start_range, end_range = subject['volume'][axis]
         if axis in label_config.get('reverse_slices', []):
             print('reversing', label_type, 'label', axis, 'slices')
-            axis_cllt.reverse_paths()
+            axis_cllt.reverse_paths(start_range, end_range)
         min_slice = axis_cllt.min_item
         max_slice = axis_cllt.max_item
         #print('axis', axis)
@@ -1097,7 +1159,7 @@ def get_label_type(db_conn, subject_id, label_type_id, label_path,
             os.path.join(label_path, axis))
         attrib_id = _insert_attribute_row(db_conn, label_attrib)
         c.execute(QUERY_INSERT_LABEL_VOLUME_AXIS, (label_mod_id,
-            label_axis_id, image_w, image_h, min_slice, max_slice,
+            axis_id, image_w, image_h, min_slice, max_slice,
             attrib_id))
         label_vol_axis_id = c.fetchone()[0]
         slices.extend((label_vol_axis_id, sl, None, None)
@@ -1113,8 +1175,9 @@ def get_contour_path(img_path):
     contour_path = os.path.join(dirname, 'contours', basename + '.txt')
     return contour_path
 
-def get_glyph_data(db_conn, subject_id, glyphs_path, config):
+def get_glyph_data(db_conn, subject, glyphs_path, config):
     print('glyphs_path:', glyphs_path)
+    start_range, end_range = subject['volume']['coronal']
     c = db_conn.cursor()
     c2 = db_conn.cursor()
     for glyph_type in os.listdir(glyphs_path):
@@ -1124,8 +1187,12 @@ def get_glyph_data(db_conn, subject_id, glyphs_path, config):
         glyph_path = os.path.join(glyphs_path, glyph_type)
         print('glyph path:', glyph_path)
         glyph_type_id = GLYPH_TYPES[glyph_type]
-        c.execute(QUERY_INSERT_GLYPH_MODALITY, (subject_id, glyph_type_id))
+        c.execute(QUERY_INSERT_GLYPH_MODALITY, (subject['id'], glyph_type_id))
         glyph_mod_id = c.fetchone()[0]
+        path_sl_range = list(range(start_range, end_range + 1))
+        if glyph_config.get('reverse_slices', False):
+            print('reversing', glyph_type, 'glyph slices')
+            path_sl_range = list(reversed(path_sl_range))
         for session_name in os.listdir(glyph_path):
             session_path = os.path.join(glyph_path, session_name)
             print('session_path:', session_path)
@@ -1138,10 +1205,7 @@ def get_glyph_data(db_conn, subject_id, glyphs_path, config):
             attrib = _check_attributes(glyph_config.get('attrib'),
                 session_path)
             attrib_id = _insert_attribute_row(db_conn, attrib)
-            slice_cllt = _get_collection_info(session_path, 'slice')
-            if glyph_config.get('reverse_slices', False):
-                print('reversing', glyph_type, 'glyph slices')
-                slice_cllt.reverse_paths()
+            slice_cllt = _get_collection_info(session_path, 'slice')            
             min_slice = slice_cllt.min_item
             max_slice = slice_cllt.max_item
             first_slice_path = os.path.join(atlas_root,
@@ -1156,17 +1220,24 @@ def get_glyph_data(db_conn, subject_id, glyphs_path, config):
                 row_cllt.path_template)
             min_col = col_cllt.min_item
             max_col = col_cllt.max_item
-            path_template = col_cllt.path_template
-            preview_path_template = os.path.join(slice_cllt.path_template,
-                'preview.png')
             image_w = col_cllt.image_w
             image_h = col_cllt.image_h
-            c2.execute(QUERY_INSERT_GLPYH_SESSION, (glyph_mod_id, session,
+            c2.execute(QUERY_INSERT_GLYPH_SESSION, (glyph_mod_id, session,
                 invivo, min_slice, max_slice, image_w, image_h,
-                min_row, max_row, min_col, max_col,
-                path_template, preview_path_template, attrib_id))
+                min_row, max_row, min_col, max_col, attrib_id))
+            session_id = c2.fetchone()[0]            
+            images = []
+            for sl, path_sl in zip(range(start_range, end_range + 1), path_sl_range):
+                if path_sl in slice_cllt.paths:
+                    images.append((session_id, sl,
+                        os.path.join(slice_cllt.path_template.format(slice=path_sl),
+                            'row_{row}', 'col_{col}.png'),
+                        os.path.join(slice_cllt.path_template.format(slice=path_sl),
+                            'preview.png')))
+            psycopg2.extras.execute_values(c2, QUERY_INSERT_GLYPH_SLICE,
+                images, page_size=PAGE_SIZE)
 
-def get_aggregate_mr_data(db_conn, subject_id, amr_path, config):
+def get_aggregate_mr_data(db_conn, subject, amr_path, config):
     amr_mod_info = {}
     c = db_conn.cursor()
     print('aggregate_mr_path:', amr_path)
@@ -1185,7 +1256,7 @@ def get_aggregate_mr_data(db_conn, subject_id, amr_path, config):
         if amr_type_id in amr_mod_info:
             amr_mod_id = amr_mod_info[amr_type_id]
         else:
-            c.execute(QUERY_INSERT_AGGREGATE_MR_MODALITY, (subject_id,
+            c.execute(QUERY_INSERT_AGGREGATE_MR_MODALITY, (subject['id'],
                 amr_type_id))
             amr_mod_info[amr_type_id] = amr_mod_id = c.fetchone()[0]
         axis_info = _get_axis_collection_info(type_path)
@@ -1200,7 +1271,7 @@ def get_aggregate_mr_axis_data(db_conn, amr_mod_id, axis_info, amr_config,
     if attrib:
         print(amr_type_name, 'attrib', attrib)
     for axis, axis_cllt in axis_info.items():
-        mr_axis_id = MR_AXIS[axis]
+        axis_id = AXIS[axis]
         image_w = axis_cllt.image_w
         image_h = axis_cllt.image_h
         min_slice = int(axis_cllt.min_item)
@@ -1210,7 +1281,7 @@ def get_aggregate_mr_axis_data(db_conn, amr_mod_id, axis_info, amr_config,
             os.path.join(namespace, axis))
         attrib_id = _insert_attribute_row(db_conn, axis_attrib)
         c.execute(QUERY_INSERT_AGGREGATE_MR_VOLUME_AXIS, (amr_mod_id,
-            mr_axis_id, image_w, image_h, min_slice, max_slice, attrib_id))
+            axis_id, image_w, image_h, min_slice, max_slice, attrib_id))
         amr_vol_axis_id = c.fetchone()[0]
         #print(axis, 'mr_vol_axis_id', mr_vol_axis_id)
         slices.extend((amr_vol_axis_id, sl, None)
