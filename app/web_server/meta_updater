@@ -77,12 +77,10 @@ class CollectionInfo:
 
     def reverse_paths(self, start_range, end_range):
         items = list(self.paths.items())
-        def reflect(v):
-            return end_range - v + start_range
-        self.min_item, self.max_item = reflect(self.max_item), reflect(self.min_item)
         for item in items:
             name, path = item
-            self.paths[reflect(name)] = path
+            new_name = end_range - name + start_range
+            self.paths[new_name] = path
 
 QUERY_RECREATE_DB = """
 DROP TABLE IF EXISTS "aggregate_mr_slice";
@@ -704,15 +702,15 @@ def get_meta_data(root_path):
             for axis in AXIS_NAMES:
                 axis_range = volume_info.get(axis)
                 if axis_range:
-                    start, end = axis_range.split('-')
-                    start = int(start)
-                    end = int(end)
+                    start_range, end_range = axis_range.split('-')
+                    start_range = int(start_range)
+                    end_range = int(end_range)
                 else:  # Assume standard range
-                    start = 1
-                    end = 256
-                volume[axis] = (start, end)
+                    start_range = 1
+                    end_range = 256
+                volume[axis] = (start_range, end_range)
                 c.execute(QUERY_INSERT_SUBJECT_VOLUME_AXIS, (subject_id,
-                    AXIS[axis], start, end))
+                    AXIS[axis], start_range, end_range))
             subject = SUBJECTS[subject_id] = {
                 'subject': subject_name,
                 'display_name': display_name,
@@ -729,18 +727,21 @@ def get_meta_data(root_path):
             #The default subject is the one specified in the configuration
             #If not found in the configuration, then it is the first subject
             default_subject = None
+            by = None
             config_default = meta_config.get('default_subject')
             if config_default:
                 for subject_id, subject in SUBJECTS.items():
                     if subject['subject'] == config_default:
                         default_subject = subject
+                        by = 'configuration'
                         break
             if not default_subject:
                 default_subject = SUBJECTS[next(iter(SUBJECTS.keys()))]
+                by = 'first subject'
             ui_id = default_subject.get('ui_id', None)
             if ui_id:
                 c.execute(QUERY_INSERT_DEFAULT_SUBJECT, (ui_id,))
-                print('set default subject to', default_subject['subject'])
+                print('set default subject to', default_subject['subject'], 'by', by)
     return None
 
 def get_modalities(db_conn, subject, subject_path, config):
