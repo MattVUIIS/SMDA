@@ -17,39 +17,6 @@ from PIL import Image
 from six.moves import configparser
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--pretty', action='store_true')
-parser.add_argument('--block', action='store_true')
-parser.add_argument('--hist', action='store_true')
-parser.add_argument('--mr', action='store_true')
-parser.add_argument('--label', action='store_true')
-parser.add_argument('--glyph', action='store_true')
-parser.add_argument('--aggregate-mr', action='store_true')
-parser.add_argument('--subject', action='append', type=str)
-parser.add_argument('--info', dest='show_info', action='store_true')
-parser.add_argument('--no-ask-pass', action='store_true')
-parser.add_argument('atlas_root', default='', nargs='?')
-options = parser.parse_args()
-
-_config = configparser.ConfigParser()
-_config.read('/opt/smda/web_server/smda_web_server.cfg')
-atlas_root = options.atlas_root
-if not atlas_root:
-    atlas_root = _config.get('atlas', 'root')
-
-if options.show_info:
-    print('atlas root:', atlas_root)
-    sys.exit(0)
-
-get_block = options.block
-get_hist = options.hist
-get_mr = options.mr
-get_labels = options.label
-get_glyphs = options.glyph
-get_aggregate_mr = options.aggregate_mr
-get_subjects = options.subject
-no_ask_pass = options.no_ask_pass
-
 #Each histology magnification level is 4 times larger than the last
 HIST_MAGNIFICATION_FACTOR = 4
 
@@ -77,10 +44,13 @@ class CollectionInfo:
 
     def reverse_paths(self, start_range, end_range):
         items = list(self.paths.items())
+        #print('range', start_range, end_range)
+        new_paths = {}
         for item in items:
             name, path = item
             new_name = end_range - name + start_range
-            self.paths[new_name] = path
+            #print('set', name, 'to', new_name)
+            new_paths[new_name] = path
 
 QUERY_RECREATE_DB = """
 DROP TABLE IF EXISTS "aggregate_mr_slice";
@@ -637,7 +607,7 @@ VALID_ATTRS = {
     'thickness_in_mm': float,
 }
 
-def get_meta_data(root_path):
+def get_meta_data(root_path, subject_list, modality_list, no_ask_pass):
     try:
         import memcache
         memcached_host = _config.get('cache', 'memcache_host')
@@ -646,6 +616,13 @@ def get_meta_data(root_path):
     except ImportError as e:
         print('Can not update memcache:', e)
         cache = None
+    #Read the configuration
+    meta_config_path = os.path.join(root_path, 'smda.yaml')
+    meta_config = read_config(meta_config_path)
+    config_default_subject = meta_config.get('default_subject')
+    default_subject = None
+    default_by = None
+    #Open the database
     database_password = None
     if not no_ask_pass:
         database_password = getpass.getpass('Enter database password:')
@@ -666,8 +643,6 @@ def get_meta_data(root_path):
     with psycopg2.connect(connect_str) as db_conn:
         c = db_conn.cursor()
         c.execute(QUERY_RECREATE_DB)
-        meta_config_path = os.path.join(root_path, 'smda.yaml')
-        meta_config = read_config(meta_config_path)
         c.execute(QUERY_INSERT_MODALITIES)
         c.execute(QUERY_INSERT_HISTOLOGY_STAINS)
         HIST_STAINS.update(c.fetchall())
@@ -681,16 +656,13 @@ def get_meta_data(root_path):
         GLYPH_TYPES.update((x[0], x[1]) for x in c.fetchall())
         c.execute(QUERY_INSERT_AGGREGATE_MR_TYPES)
         AGGREGATE_MR_TYPES.update((x[0], x[1:]) for x in c.fetchall())
-        if get_subjects:
-            subject_list = get_subjects
-        else:
-            subject_list = sorted(os.listdir(root_path))
-        #print('subject list: ', subject_list)
+        #Scan each subject folder
         for subject_name in subject_list:
-            path = os.path.join(root_path, subject_name)
-            if not os.path.isdir(path):
+            subject_path = os.path.join(root_path, subject_name)
+            if not os.path.isdir(subject_path):
                 continue
-            subject_config_path = os.path.join(path, 'config.yaml')
+            subject_config_path = os.path.join(subject_path, 'config.yaml')
+            #Get the subject configuration and volume size
             config = read_config(subject_config_path)
             display_name = config.get('display_name', subject_name)
             print('subject', subject_name)
@@ -718,33 +690,30 @@ def get_meta_data(root_path):
                 'ui_id': ui_id,
                 'volume': volume,
             }
-            get_modalities(db_conn, subject, path, config)
+            if subject_name == config_default_subject:
+                default_subject = subject
+                default_by = 'configuration'
+            #Get the meta-information from the modalities
+            get_modalities(db_conn, subject, subject_path, modality_list,
+                config)
             if cache:
                 cache.delete('subject_info[{0}]'.format(ui_id))
         print('subjects:')
         pprint.pprint(SUBJECTS)
         if SUBJECTS:
             #The default subject is the one specified in the configuration
-            #If not found in the configuration, then it is the first subject
-            default_subject = None
-            by = None
-            config_default = meta_config.get('default_subject')
-            if config_default:
-                for subject_id, subject in SUBJECTS.items():
-                    if subject['subject'] == config_default:
-                        default_subject = subject
-                        by = 'configuration'
-                        break
+            #If not specified, then the default is the first subject
             if not default_subject:
                 default_subject = SUBJECTS[next(iter(SUBJECTS.keys()))]
-                by = 'first subject'
+                default_by = 'first subject'
             ui_id = default_subject.get('ui_id', None)
             if ui_id:
                 c.execute(QUERY_INSERT_DEFAULT_SUBJECT, (ui_id,))
-                print('set default subject to', default_subject['subject'], 'by', by)
+                print('set default subject to', default_subject['subject'],
+                    'by', default_by)
     return None
 
-def get_modalities(db_conn, subject, subject_path, config):
+def get_modalities(db_conn, subject, subject_path, modality_list, config):
     modality_table = {
         'block': ('block', get_block_data),
         'hist': ('hist', get_hist_data),
@@ -753,22 +722,6 @@ def get_modalities(db_conn, subject, subject_path, config):
         'glyphs': ('glyphs', get_glyph_data),
         'aggregateMR': ('aggregateMR', get_aggregate_mr_data)
     }
-    modality_list = []
-    if get_block:
-        modality_list.append('block')
-    if get_hist:
-        modality_list.append('hist')
-    if get_mr:
-        modality_list.append('MR')
-    if get_labels:
-        modality_list.append('labels')
-    if get_glyphs:
-        modality_list.append('glyphs')
-    if get_aggregate_mr:
-        modality_list.append('aggregateMR')
-    if not modality_list:
-        modality_list = ('block', 'hist', 'MR', 'labels',
-            'glyphs', 'aggregateMR')
     #print('modality list: ', modality_list)
     for modality in os.listdir(subject_path):
         if modality not in modality_list:
@@ -919,7 +872,7 @@ def get_hist_stain(db_conn, subject, hist_stain_id, hist_stain_path,
     print('hist_stain_path:', hist_stain_path)
     #We use the first slice, first level, and first row to
     #summarize the rest of the histology
-    #Get the slice information    
+    #Get the slice information
     c = db_conn.cursor()
     slice_cllt = _get_collection_info(hist_stain_path, 'slice')
     #slice_cllt.path_template = slice_cllt.path_template()
@@ -1165,12 +1118,12 @@ def get_label_type(db_conn, subject, label_type_id, label_path,
         label_vol_axis_id = c.fetchone()[0]
         slices.extend((label_vol_axis_id, sl, None, None)
             for sl in axis_cllt.holes)
-        slices.extend((label_vol_axis_id, sl, img_path, get_contour_path(img_path))
+        slices.extend((label_vol_axis_id, sl, img_path, _get_contour_path(img_path))
             for sl, img_path in axis_cllt.paths.items())
     psycopg2.extras.execute_values(c, QUERY_INSERT_LABEL_SLICE,
         slices, page_size=PAGE_SIZE)
 
-def get_contour_path(img_path):
+def _get_contour_path(img_path):
     dirname, basename = os.path.split(img_path)
     basename, ext = os.path.splitext(basename)
     contour_path = os.path.join(dirname, 'contours', basename + '.txt')
@@ -1206,7 +1159,7 @@ def get_glyph_data(db_conn, subject, glyphs_path, config):
             attrib = _check_attributes(glyph_config.get('attrib'),
                 session_path)
             attrib_id = _insert_attribute_row(db_conn, attrib)
-            slice_cllt = _get_collection_info(session_path, 'slice')            
+            slice_cllt = _get_collection_info(session_path, 'slice')
             min_slice = slice_cllt.min_item
             max_slice = slice_cllt.max_item
             first_slice_path = os.path.join(atlas_root,
@@ -1226,7 +1179,7 @@ def get_glyph_data(db_conn, subject, glyphs_path, config):
             c2.execute(QUERY_INSERT_GLYPH_SESSION, (glyph_mod_id, session,
                 invivo, min_slice, max_slice, image_w, image_h,
                 min_row, max_row, min_col, max_col, attrib_id))
-            session_id = c2.fetchone()[0]            
+            session_id = c2.fetchone()[0]
             images = []
             for sl, path_sl in zip(range(start_range, end_range + 1), path_sl_range):
                 if path_sl in slice_cllt.paths:
@@ -1312,4 +1265,51 @@ def read_config(yaml_path):
             file=sys.stderr)
     return config
 
-get_meta_data(atlas_root)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--pretty', action='store_true')
+    parser.add_argument('--block', action='store_true')
+    parser.add_argument('--hist', action='store_true')
+    parser.add_argument('--mr', action='store_true')
+    parser.add_argument('--label', action='store_true')
+    parser.add_argument('--glyph', action='store_true')
+    parser.add_argument('--aggregate-mr', action='store_true')
+    parser.add_argument('--subject', action='append', type=str)
+    parser.add_argument('--info', dest='show_info', action='store_true')
+    parser.add_argument('--no-ask-pass', action='store_true')
+    parser.add_argument('atlas_root', default='', nargs='?')
+    options = parser.parse_args()
+
+    _config = configparser.ConfigParser()
+    _config.read('/opt/smda/web_server/smda_web_server.cfg')
+    atlas_root = os.path.abspath(options.atlas_root or
+        _config.get('atlas', 'root'))
+
+    if options.show_info:
+        print('atlas root:', atlas_root)
+        sys.exit(0)
+
+    if options.subject:
+        subject_list = options.subject
+    else:
+        subject_list = sorted(os.listdir(atlas_root))
+
+    modality_list = []
+    if options.block:
+        modality_list.append('block')
+    if options.hist:
+        modality_list.append('hist')
+    if options.mr:
+        modality_list.append('MR')
+    if options.label:
+        modality_list.append('labels')
+    if options.glyph:
+        modality_list.append('glyphs')
+    if options.aggregate_mr:
+        modality_list.append('aggregateMR')
+    if not modality_list:
+        modality_list = ('block', 'hist', 'MR', 'labels',
+            'glyphs', 'aggregateMR')
+
+    get_meta_data(atlas_root, subject_list, modality_list,
+        options.no_ask_pass)
