@@ -35,7 +35,32 @@
   <script type="text/javascript" src="js/livestamp.min.js"></script>
 
   <script type="text/javascript" src="js/util.js?v={{ get_hash('js', 'util.js') }}"></script>
-  <script type="text/javascript" src="js/viewer.min.js?v={{ get_hash('js', 'viewer.min.js') }}"></script>
+
+  <!-- TODO: Remove the following in production -->
+  <script type="text/javascript" src="js/viewer/viewer_shader.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_canvas.js"></script>
+
+  <script type="text/javascript" src="js/viewer/viewer_image.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_contours.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_panel.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_single_image_panel.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_mosaic_panel.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_label_panel.js"></script>
+
+  <script type="text/javascript" src="js/viewer/viewer_view.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_view_class.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_block_view.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_hist_view.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_mr_view.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_label_view.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_glyph_view.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_aggregate_mr_view.js"></script>
+
+  <script type="text/javascript" src="js/viewer/viewer_toolset.js"></script>
+  <script type="text/javascript" src="js/viewer/viewer_context.js"></script>
+  <!-- TODO: Remove the above in production -->
+
+  <script type="text/javascript" src="js/viewer_module.js?v={{ get_hash('js', 'viewer_module.js') }}"></script>
 
   <script type="text/javascript" src="js/home_module.js?v={{ get_hash('js', 'home_module.js') }}"></script>
   <script type="text/javascript" src="js/nav_module.js?v={{ get_hash('js', 'nav_module.js') }}"></script>
