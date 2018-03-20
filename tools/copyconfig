@@ -1,9 +1,9 @@
 #!/bin/bash -x
 cd $PROJECTHOME
 #scp -r root/ root@${SRV_IP}:/
-rsync -aO --no-perms --progress -e "ssh -p ${SRV_PORT}" root/root/ root@${SRV_IP}:/root
-rsync -aO --delete --no-perms --progress -e "ssh -p ${SRV_PORT}" root/etc/nginx/ root@${SRV_IP}:/etc/nginx/
-rsync -aO --delete --no-perms --progress -e "ssh -p ${SRV_PORT}" root/etc/keys/ root@${SRV_IP}:/etc/keys/
-rsync -aO --delete --no-perms --progress -e "ssh -p ${SRV_PORT}" root/etc/sudoers root@${SRV_IP}:/etc/sudoers
-rsync -aO --delete --no-perms --progress -e "ssh -p ${SRV_PORT}" root/etc/supervisord.conf root@${SRV_IP}:/etc/supervisord.conf
+rsync -aO --no-perms --no-owner --progress -e "ssh -p ${SRV_PORT}" root/root/ root@${SRV_IP}:/root
+rsync -aO --delete --no-perms --no-owner --progress -e "ssh -p ${SRV_PORT}" root/etc/nginx/ root@${SRV_IP}:/etc/nginx/
+rsync -aO --delete --no-perms --no-owner --progress -e "ssh -p ${SRV_PORT}" root/etc/keys/ root@${SRV_IP}:/etc/keys/
+rsync -aO --delete --no-perms --no-owner --progress -e "ssh -p ${SRV_PORT}" root/etc/sudoers root@${SRV_IP}:/etc/sudoers
+rsync -aO --delete --no-perms --no-owner --progress -e "ssh -p ${SRV_PORT}" root/etc/supervisord.conf root@${SRV_IP}:/etc/supervisord.conf
 
