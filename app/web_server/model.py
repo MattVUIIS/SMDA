@@ -3,29 +3,24 @@
     Manages the smda database
 """
 import ConfigParser
-import datetime
-import dateutil.relativedelta
-import json
 import logging
 import os
 import psycopg2
 import psycopg2.extras
-import re
-import requests
-import urllib
-from kombu import Connection, Exchange, Queue
+
+from six.moves import configparser
 
 
-_app_config = ConfigParser.ConfigParser()
+_app_config = configparser.ConfigParser()
 _app_config.read('/opt/smda/smda-app.cfg')
 DATE_FORMAT = _app_config.get('database', 'date_format')
 amqp_connect_str = _app_config.get('messaging', 'amqp_connect_str')
 
-_db_config = ConfigParser.ConfigParser()
+_db_config = configparser.ConfigParser()
 _db_config.read('/opt/smda/smda-db.cfg')
 connect_str = _db_config.get('database', 'connect_str')
 
-_config = ConfigParser.ConfigParser()
+_config = configparser.ConfigParser()
 _config.read('/opt/smda/web_server/smda_web_server.cfg')
 atlas_root = _config.get('atlas', 'root')
 
@@ -468,10 +463,11 @@ def _check_image_path(img_path):
     #logger.debug('img_path: {0}'.format(img_path))
     if img_path:
         full_img_path = os.path.join(atlas_root, img_path)
-        if os.path.exists(full_img_path):
-            logger.debug('path exists: {0}'.format(full_img_path))
-            return img_path
-        logger.error('path does not exist: {0}'.format(full_img_path))
+        #if os.path.exists(full_img_path):
+        #    logger.debug('path exists: {0}'.format(full_img_path))
+        #    return img_path
+        #logger.error('path does not exist: {0}'.format(full_img_path))
+        return img_path
     return None
 
 def get_block_image_path(ui_id, slice_i):

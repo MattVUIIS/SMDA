@@ -3,8 +3,6 @@ from __future__ import print_function, division
 import argparse
 import errno
 import getpass
-import itertools
-import json
 import os
 import pprint
 import psycopg2
@@ -20,37 +18,254 @@ from six.moves import configparser
 #Each histology magnification level is 4 times larger than the last
 HIST_MAGNIFICATION_FACTOR = 4
 
-class CollectionInfo:
-    def __init__(self, min_item=None, max_item=None, holes=None,
-            item_suffix=None, image_w=None, image_h=None, paths=None,
-            path_template=None):
-        self.min_item = min_item
-        self.max_item = max_item
-        if holes:
-            self.holes = holes
-        else:
-            self.holes = []
-        self.item_suffix = item_suffix
-        self.image_w = image_w
-        self.image_h = image_h
-        if paths:
-            self.paths = paths
-        else:
-            self.paths = {}
-        self.path_template = path_template
+class AtlasRoot:
+    def __init__(self, path):
+        self.path = path
+        self.subjects = {}
+
+    def add_subject(self, name, display_name, primary_key, ui_id):
+        subject = self.subjects[name] = Subject(self, name, display_name,
+            primary_key, ui_id)
+        return subject
 
     def __repr__(self):
-        return repr(self.__dict__)
+        return '<AtlasRoot {0}>'.format(self.__dict__)
 
-    def reverse_paths(self, start_range, end_range):
-        items = list(self.paths.items())
+class Subject:
+    def __init__(self, root, name, display_name, primary_key, ui_id):
+        self.root = root
+        self.name = name
+        self.display_name = display_name
+        self.id = primary_key
+        self.ui_id = ui_id
+        self.volume = {
+            'coronal': [None, None],
+            'axial': [None, None],
+            'sagittal': [None, None],
+        }
+        self.modalities = {}
+
+    def define_modality(self, name, path, config):
+        modality = self.modalities[name] = Modality(self.root, self,
+            name, path, config)
+        return modality
+
+    def __repr__(self):
+        return '<Subject {0}>'.format({'name': self.name,
+            'display_name': self.display_name, 'id': self.id,
+            'ui_id': self.ui_id, 'volume': self.volume,
+            'modalities': self.modalities})
+
+class Modality:
+    def __init__(self, root, subject, name, path, config):
+        self.root = root
+        self.subject = subject
+        self.name = name
+        self.path = path
+        self.config = config
+        self.axes = {}
+
+    def define_axis(self, axis_name_or_list, axis_path, item):
+        if isinstance(axis_name_or_list, list):
+            submodalities = axis_name_or_list[:-1]
+            axis_name = axis_name_or_list[-1]
+            full_axis_name = '.'.join(axis_name_or_list)
+        else:
+            submodalities = []
+            full_axis_name = axis_name = axis_name_or_list
+        #axis_range = self.subject.volume[axis_name]
+        attrib = self.config.get('attrib', {})
+        #print('axis_name', axis_name)
+        axis_attrib = _check_attributes(attrib.get(axis_name, {}) or attrib,
+            self.path)
+        #print('axis_attrib', self.config.get(axis_name, {}), self.config.get('attrib'), '->', axis_attrib)
+        #print('attrib', attrib)
+        axis = self.axes[full_axis_name] = ImageAxis(full_axis_name,
+            self.subject.volume, axis_path, item, axis_attrib, _parent=self)
+        #if axis_range[0] is None or axis.min_item < axis_range[0]:
+        #    axis_range[0] = axis.min_item
+        #if axis_range[1] is None or axis.max_item > axis_range[1]:
+        #    axis_range[1] = axis.max_item
+        return axis
+
+    def get_axis(self, axis_name_or_list):
+        if isinstance(axis_name_or_list, list):
+            full_axis_name = '.'.join(axis_name_or_list)
+        else:
+            full_axis_name = axis_name_or_list
+        return self.axes.get(full_axis_name)
+
+    def __repr__(self):
+        return '<Modality name={0} path={1} config={2} axes={{{3}}}>'.format(
+            self.name, self.path, self.config, self.axes)
+
+class ImageAxis:
+    def __init__(self, name, volume, path, item, attrib,
+            _parent=None, _parent_axis=None):
+        self.name = name
+        self.volume = volume
+        self.attrib = attrib
+        self.subaxes = {}
+        self._parent = _parent
+        self._parent_axis = _parent_axis
+        if self._parent:
+            self.parent_dir = self._parent.path # Modality path
+            self.root = self._parent.root
+        else:
+            self.parent_dir = path
+            self.root = self._parent_axis.root # ImageAxis path
+        self.build_from_path(path, item)
+
+    def build_from_path(self, path, item):
+        self.path = path
+        self.prefix_dir = os.path.relpath(self.path, self.parent_dir)
+        self.item = item
+        self.paths = {}
+        self.min_item = None
+        self.max_item = None
+        self.image_w = None
+        self.image_h = None
+        self.path_template = None
+        return self._build_from_path(path, item, self.prefix_dir)
+
+    def _build_from_path(self, path, item, prefix_dir, is_split_folder=False):
+        #print('build from path', path)
+        if not item:
+            return None
+        #If this is a split folder
+        if os.path.exists(os.path.join(path, '0')):
+            for split in os.listdir(path):
+                split_path = os.path.join(path, str(split))
+                if not os.path.isdir(split_path):
+                    continue
+                self._build_from_path(split_path, item,
+                    os.path.normpath(os.path.join(prefix_dir, split)),
+                    is_split_folder=True)
+        else: #If this is not a prefix folder
+            for item_name in os.listdir(path):
+                if not item_name.startswith(item):
+                    #print('bad item_name', item_name)
+                    continue
+                item_path = os.path.join(path, item_name)
+                #print('item_path', prefix_dir, item_path)
+                item_num = int(re.search('(\d+)', item_name).group(1))
+                #print('item name:', item_name, 'item num:', item_num)
+                if self.min_item is None or item_num < self.min_item:
+                    self.min_item = item_num
+                    if self.name in AXIS_NAMES:
+                        axis_range = self.volume.get(self.name)
+                        if axis_range[0] is None or self.min_item < axis_range[0]:
+                            axis_range[0] = self.min_item
+                if self.max_item is None or item_num > self.max_item:
+                    self.max_item = item_num
+                    if self.name in AXIS_NAMES:
+                        axis_range = self.volume.get(self.name)
+                        if axis_range[1] is None or self.max_item > axis_range[1]:
+                            axis_range[1] = self.max_item
+                item_path_no_suffix = os.path.join(self.parent_dir,
+                    prefix_dir, item + '_{0}'.format(item_num))
+                #print('item_path_no_suffix', prefix_dir, item_path_no_suffix)
+                self.paths[item_num] = item_path_no_suffix
+                _, ext = os.path.splitext(item_path)
+                if os.path.isfile(item_path) and self.image_w is None and ext.lower() in ('.png', '.jpg'):
+                    with Image.open(item_path) as img:
+                        image_w, image_h = img.size
+                    if self.image_w is None or image_w > self.image_w:
+                        self.image_w = image_w
+                    if self.image_h is None or image_h > self.image_h:
+                        self.image_h = image_h
+            if self.path_template is None:
+                if is_split_folder:
+                    #value = int(re.search('^(\d+)$', prefix_dir).group(1))
+                    #hundreds = slice_n // 100 % 10
+                    prefix_dir = re.sub('^(\d+)$', '{{{0} // 100 % 10}}'.format(item),
+                        prefix_dir)
+                self.path_template = os.path.join(prefix_dir,
+                    item + '_{0}'.format('{' + item + '}'))
+
+    def reverse_paths(self):
+        if self.name in AXIS_NAMES:
+            start_range, end_range = self.volume.get(self.name)
+        else:
+            start_range, end_range = self.min_item, self.max_item
         #print('range', start_range, end_range)
         new_paths = {}
-        for item in items:
-            name, path = item
+        for name, path in self.paths.items():
             new_name = end_range - name + start_range
-            #print('set', name, 'to', new_name)
+            #print('set', name, 'to', new_name, path)
             new_paths[new_name] = path
+        self.paths = new_paths
+        #for full_axis_name, subaxis in self.subaxes.items():
+        #    print('reversing subaxis', full_axis_name)
+        #    subaxis.reverse_paths()
+
+    def get_relpaths(self):
+        return ((name, os.path.relpath(path, self.root.path))
+            for name, path in self.paths.items())
+
+    def define_subaxis(self, subaxis_name_or_list, subaxis_path, item):
+        if isinstance(subaxis_name_or_list, list):
+            submodalities = subaxis_name_or_list[:-1]
+            axis_name = subaxis_name_or_list[-1]
+            full_axis_name = '.'.join(subaxis_name_or_list)
+        else:
+            submodalities = []
+            axis_name = full_axis_name = subaxis_name_or_list
+        #print('define subaxis', subaxis_name_or_list, subaxis_path)
+        axis = self.subaxes[full_axis_name] = ImageAxis(full_axis_name,
+            self.volume, subaxis_path, item, None, _parent_axis=self)
+        return axis
+
+    def get_subaxis(self, subaxis_name_or_list):
+        if isinstance(subaxis_name_or_list, list):
+            full_subaxis_name = '.'.join(subaxis_name_or_list)
+        else:
+            full_subaxis_name = subaxis_name_or_list
+        return self.subaxes.get(full_subaxis_name)
+
+    def get_full_path_template(self, *extra_paths, **keywords):
+        full_path_template = ''
+        last_axis = axis = self
+        while axis:
+            last_axis = axis
+            try:
+                path_template = axis.path_template.format(**keywords)
+            except KeyError:
+                path_template = axis.path_template
+            #print('add template', path_template)
+            full_path_template = os.path.join(path_template, full_path_template)
+            axis = axis._parent_axis
+        full_path_template = os.path.join(last_axis._parent.path,
+            full_path_template, *extra_paths)
+        #print('full_path_template', full_path_template)
+        full_path_template = os.path.relpath(full_path_template, self.root.path)
+        #print('final template', full_path_template)
+        return full_path_template
+
+    def get_rel_path_template(self, rel_path, *extra_paths, **keywords):
+        rel_path_template = ''
+        axis = self
+        common_path = os.path.commonpath([rel_path,
+            os.path.relpath(axis.path, self.root.path)])
+        while axis and os.path.relpath(axis.path, self.root.path) != common_path:
+            try:
+                path_template = axis.path_template.format(**keywords)
+            except KeyError:
+                path_template = axis.path_template
+            rel_path_template = os.path.join(path_template, rel_path_template)
+            axis = axis._parent_axis
+        rel_path_template = os.path.join(rel_path, rel_path_template, *extra_paths)
+        rel_path_template = os.path.normpath(rel_path_template)
+        return rel_path_template
+
+    def __repr__(self):
+        return ('<ImageAxis name={0} prefix_dir={1} parent_dir={2} ' +
+            'item={3} min_item={4} max_item={5} image_w={6} image_h={7} ' +
+            'path_template={8} attrib={9} path={10} paths={11} subaxes={{{12}}}>').format(
+            self.name, self.prefix_dir, self.parent_dir, self.item,
+            self.min_item, self.max_item, self.image_w, self.image_h,
+            self.path_template, self.attrib, self.path, len(self.paths),
+            self.subaxes)
 
 QUERY_RECREATE_DB = """
 DROP TABLE IF EXISTS "aggregate_mr_slice";
@@ -560,7 +775,7 @@ INSERT INTO "aggregate_mr_slice" (amr_vol_axis_id, slice, file_path)
 VALUES %s RETURNING amr_slice_id
 """
 
-SUBJECTS = {}
+ATLAS_ROOT = None
 
 MODALITIES = {}
 
@@ -616,6 +831,7 @@ def get_meta_data(root_path, subject_list, modality_list, no_ask_pass):
     except ImportError as e:
         print('Can not update memcache:', e)
         cache = None
+    atlas_root = AtlasRoot(root_path)
     #Read the configuration
     meta_config_path = os.path.join(root_path, 'smda.yaml')
     meta_config = read_config(meta_config_path)
@@ -665,143 +881,76 @@ def get_meta_data(root_path, subject_list, modality_list, no_ask_pass):
             #Get the subject configuration and volume size
             config = read_config(subject_config_path)
             display_name = config.get('display_name', subject_name)
-            print('subject', subject_name)
-            print('display name', display_name)
             c.execute(QUERY_INSERT_SUBJECT, (subject_name, display_name))
             subject_id, ui_id = c.fetchone()
-            volume_info = config.get('volume', {})
-            volume = {}
-            for axis in AXIS_NAMES:
-                axis_range = volume_info.get(axis)
-                if axis_range:
-                    start_range, end_range = axis_range.split('-')
-                    start_range = int(start_range)
-                    end_range = int(end_range)
-                else:  # Assume standard range
-                    start_range = 1
-                    end_range = 256
-                volume[axis] = (start_range, end_range)
-                c.execute(QUERY_INSERT_SUBJECT_VOLUME_AXIS, (subject_id,
-                    AXIS[axis], start_range, end_range))
-            subject = SUBJECTS[subject_id] = {
-                'subject': subject_name,
-                'display_name': display_name,
-                'id': subject_id,
-                'ui_id': ui_id,
-                'volume': volume,
-            }
+            subject = atlas_root.add_subject(subject_name, display_name,
+                subject_id, ui_id)
+            modality_nodes = define_modality_nodes(subject, subject_path,
+                modality_list, config)
             if subject_name == config_default_subject:
                 default_subject = subject
                 default_by = 'configuration'
+            for axis, rnge in subject.volume.items():
+                start_range, end_range = rnge
+                if start_range and end_range:
+                    axis_id = AXIS[axis]
+                    #print('insert', subject_id, axis_id, start_range, end_range)
+                    c.execute(QUERY_INSERT_SUBJECT_VOLUME_AXIS, (subject_id,
+                        axis_id, start_range, end_range))
             #Get the meta-information from the modalities
-            get_modalities(db_conn, subject, subject_path, modality_list,
-                config)
+            get_modality_data(db_conn, subject)
             if cache:
                 cache.delete('subject_info[{0}]'.format(ui_id))
         print('subjects:')
-        pprint.pprint(SUBJECTS)
-        if SUBJECTS:
+        pprint.pprint(atlas_root.subjects)
+        if atlas_root.subjects:
             #The default subject is the one specified in the configuration
             #If not specified, then the default is the first subject
             if not default_subject:
-                default_subject = SUBJECTS[next(iter(SUBJECTS.keys()))]
+                first_subject = next(iter(atlas_root.subjects.keys()))
+                default_subject = atlas_root.subjects[first_subject]
                 default_by = 'first subject'
-            ui_id = default_subject.get('ui_id', None)
+            ui_id = default_subject.ui_id
             if ui_id:
                 c.execute(QUERY_INSERT_DEFAULT_SUBJECT, (ui_id,))
-                print('set default subject to', default_subject['subject'],
+                print('set default subject to', default_subject.name,
                     'by', default_by)
     return None
 
-def get_modalities(db_conn, subject, subject_path, modality_list, config):
+def define_modality_nodes(subject, subject_path, modality_list, config):
+    #Explore each folder to get the true volume
     modality_table = {
-        'block': ('block', get_block_data),
-        'hist': ('hist', get_hist_data),
-        'MR': ('MR', get_mr_data),
-        'labels': ('labels', get_label_data),
-        'glyphs': ('glyphs', get_glyph_data),
-        'aggregateMR': ('aggregateMR', get_aggregate_mr_data)
+        'block': define_modality_block,
+        'hist': define_modality_hist,
+        'MR': define_modality_mr,
     }
-    #print('modality list: ', modality_list)
-    for modality in os.listdir(subject_path):
-        if modality not in modality_list:
+    for modality_name in os.listdir(subject_path):
+        if modality_name not in modality_list:
             continue
-        if config.get(modality, {}).get('skip', False):
+        if config.get(modality_name, {}).get('skip', False):
             continue
-        path = os.path.join(subject_path, modality)
-        #print('modality: ', modality)
-        rule = modality_table.get(modality)
-        if rule and modality in modality_list:
-            rule[1](db_conn, subject, path, config)
-    return None
+        path = os.path.join(subject_path, modality_name)
+        rule = modality_table.get(modality_name)
+        if rule:
+            rule(subject, path, config)
+    return subject.modalities
 
-def _get_collection_info(root, item, path_template=None):
-    c = CollectionInfo()
-    if os.path.exists(os.path.join(root, '0')): #If this is a prefix folder
-        for prefix in os.listdir(root):
-            prefix_path = os.path.join(root, str(prefix))
-            if not os.path.isdir(prefix_path):
-                continue
-            new_c = _get_collection_info(prefix_path, item)
-            if new_c.min_item != None:
-                if c.min_item is None:
-                    c.min_item = new_c.min_item
-                else:
-                    c.min_item = min(new_c.min_item, c.min_item)
-            if new_c.max_item != None:
-                if c.max_item is None:
-                    c.max_item = new_c.max_item
-                else:
-                    c.max_item = max(new_c.max_item, c.max_item)
-            c.holes.extend(new_c.holes)
-            c.item_suffix = new_c.item_suffix
-            if new_c.image_w != None:
-                if c.image_w is None:
-                    c.image_w = new_c.image_w
-                else:
-                    c.image_w = max(new_c.image_w, c.image_w)
-            if new_c.image_h != None:
-                if c.image_h is None:
-                    c.image_h = new_c.image_h
-                else:
-                    c.image_h = max(new_c.image_h, c.image_h)
-            c.paths.update(new_c.paths)
-    else:
-        for item_name in os.listdir(root):
-            if not item_name.startswith(item):
-                continue
-            item_path = os.path.join(root, item_name)
-            item_num = int(re.search('(\d+)', item_name).group(1))
-            #print('item name:', item_name, 'item num:', item_num)
-            if c.min_item is None or item_num < c.min_item:
-                c.min_item = item_num
-            if c.max_item is None or item_num > c.max_item:
-                c.max_item = item_num
-        if c.min_item is not None and c.max_item is not None:
-            #print('item_name:', item_name)
-            fn = re.search('(\d+)(.+)?', item_name)
-            if fn:
-                c.item_suffix = fn.group(2) or ''
-            else:
-                c.item_suffix = ''
-            #print('item_suffix:', c.item_suffix)
-            if c.path_template is None:
-                if path_template is None:
-                    path_template = os.path.relpath(root, atlas_root)
-                c.path_template = os.path.join(path_template,
-                    '{0}_{1}{2}'.format(item, '{' + item + '}',
-                    c.item_suffix))
-            for item_num in range(c.min_item, c.max_item + 1):
-                item_path = os.path.join(root, item + '_{0}{1}'.format(
-                    item_num, c.item_suffix))
-                if not os.path.exists(item_path):
-                    c.holes.append(item_num)
-                else:
-                    c.paths[item_num] = os.path.relpath(item_path, atlas_root)
-                    if c.item_suffix == '.png' and c.image_w is None:
-                        with Image.open(item_path) as img:
-                            c.image_w, c.image_h = img.size
-    return c
+def get_modality_data(db_conn, subject):
+    modality_table = {
+        'block': get_block_data,
+        'hist': get_hist_data,
+        'MR': get_mr_data,
+        #'labels': get_label_node,
+        #'glyphs': get_glyph_node,
+        #'aggregateMR': get_aggregate_mr_node,
+    }
+    for modality in subject.modalities.values():
+        rule = modality_table.get(modality.name)
+        if rule:
+            print('subject', subject.name)
+            print('display name', subject.display_name)
+            rule(db_conn, modality)
+    return None
 
 def _check_attributes(attributes, namespace=None):
     if attributes:
@@ -836,125 +985,94 @@ def _insert_attribute_row(db_conn, attributes, namespace=None):
         attrib_id = c.fetchone()[0]
     return attrib_id
 
-def get_block_data(db_conn, subject, block_path, config):
-    print('block_path:', block_path)
-    cllt = _get_collection_info(block_path, 'slice')
+def define_modality_block(subject, block_path, config):
+    print('scanning:', block_path, '...')
     block_config = config.get('block', {})
-    start_range, end_range = subject['volume']['coronal']
-    if block_config.get('reverse_slices', False):
+    modality = subject.define_modality('block', block_path, block_config)
+    axis = modality.define_axis('coronal', block_path, 'slice')
+
+def get_block_data(db_conn, modality):
+    print('update meta:', modality.path)
+    axis = modality.axes['coronal']
+    if modality.config.get('reverse_slices', False):
         print('reversing block slices')
-        cllt.reverse_paths(start_range, end_range)
-    attrib = _check_attributes(block_config.get('attrib'), block_path)
-    attrib_id = _insert_attribute_row(db_conn, attrib)
+        axis.reverse_paths()
+    attrib_id = _insert_attribute_row(db_conn, axis.attrib)
     c = db_conn.cursor()
-    c.execute(QUERY_INSERT_BLOCK_MODALITY, (subject['id'], cllt.image_w,
-        cllt.image_h, cllt.min_item, cllt.max_item, attrib_id))
+    c.execute(QUERY_INSERT_BLOCK_MODALITY, (modality.subject.id,
+        axis.image_w, axis.image_h, axis.min_item, axis.max_item, attrib_id))
     block_mod_id = c.fetchone()[0]
-    images = []
-    images.extend((block_mod_id, sl, None) for sl in cllt.holes)
-    images.extend((block_mod_id, sl, img_path)
-        for sl, img_path in cllt.paths.items())
+    images = [(block_mod_id, sl, img_path)
+        for sl, img_path in axis.get_relpaths()]
     psycopg2.extras.execute_values(c, QUERY_INSERT_BLOCK_SLICE,
         images, page_size=PAGE_SIZE)
 
-def get_hist_data(db_conn, subject, hist_path, config):
+def define_modality_hist(subject, hist_path, config):
+    print('scanning:', hist_path, '...')
+    hist_config = config.get('hist', {})
+    modality = subject.define_modality('hist', hist_path, hist_config)
     for stain in os.listdir(hist_path):
-        path = os.path.join(hist_path, stain)
         if stain in HIST_STAINS:
-            hist_config = config.get('hist', {}).get(stain, {})
-            if not hist_config.get('skip', False):
-                hist_stain_id = HIST_STAINS[stain]
-                get_hist_stain(db_conn, subject, hist_stain_id, path,
-                    hist_config, stain)
+            stain_path = os.path.join(hist_path, stain)
+            stain_config = hist_config.get(stain, {})
+            stain_axis = modality.define_axis(stain, stain_path, '')
+            if not stain_config.get('skip', False):
+                slice_axis = stain_axis.define_subaxis('coronal', stain_path,
+                    'slice')
+                slice_axis.attrib = _check_attributes(stain_config.get('attrib'),
+                    hist_path)
+                #For the first slice, create a subaxis for every level
+                #For every level, create a subaxis for the first row and column
+                for sl, slice_path in slice_axis.paths.items():
+                    level_axis = slice_axis.define_subaxis('level', slice_path,
+                        'level')
+                    for level, level_path in level_axis.paths.items():
+                        row_axis = level_axis.define_subaxis(level, level_path,
+                            'row')
+                        for col, col_path in row_axis.paths.items():
+                            col_axis = row_axis.define_subaxis('column', col_path,
+                                'col')
+                            break
+                    break
 
-def get_hist_stain(db_conn, subject, hist_stain_id, hist_stain_path,
-        hist_config, stain):
-    print('hist_stain_path:', hist_stain_path)
-    #We use the first slice, first level, and first row to
-    #summarize the rest of the histology
-    #Get the slice information
+def get_hist_data(db_conn, modality):
     c = db_conn.cursor()
-    slice_cllt = _get_collection_info(hist_stain_path, 'slice')
-    #slice_cllt.path_template = slice_cllt.path_template()
-    if slice_cllt.min_item is None or slice_cllt.max_item is None:
-        return None
-    start_range, end_range = subject['volume']['coronal']
-    path_sl_range = list(range(start_range, end_range + 1))
-    if hist_config.get('reverse_slices', False):
-        print('reversing', stain, 'histology slices')
-        path_sl_range = list(reversed(path_sl_range))
-    #print('min_slice:', min_slice, 'max_slice', max_slice)
-    min_slice = int(slice_cllt.min_item)
-    max_slice = int(slice_cllt.max_item)
-    slice_holes = slice_cllt.holes
-    attrib = _check_attributes(hist_config.get('attrib'), hist_stain_path)
-    attrib_id = _insert_attribute_row(db_conn, attrib)
-    c.execute(QUERY_INSERT_HISTOLOGY_MODALITY, (subject['id'], hist_stain_id,
-        HIST_MAGNIFICATION_FACTOR, min_slice, max_slice, attrib_id))
-    hist_mod_id = c.fetchone()[0]
-    slice_path = os.path.join(atlas_root, slice_cllt.paths[min_slice])
-    #print('slice_path:', slice_path)
-    level_cllt = _get_collection_info(slice_path, 'level',
-        slice_cllt.path_template)
-    if level_cllt.min_item is None or level_cllt.max_item is None:
-        return None
-    min_level = int(level_cllt.min_item)
-    max_level = int(level_cllt.max_item)
-    #print('min_level:', min_level, 'max_level', max_level)
-    level_holes = level_cllt.holes
-    #Get each level information
-    for level, level_path in level_cllt.paths.items():
-        if level in level_holes:
-            continue
-        #print('level:', level)
-        level_path = os.path.join(atlas_root, level_path)
-        #print('level_path:', level_path)
-        #Get the row info from the level
-        row_cllt = _get_collection_info(level_path, 'row',
-            level_cllt.path_template)
-        min_row = int(row_cllt.min_item)
-        max_row = int(row_cllt.max_item)
-        #print('min_row:', min_row, 'max_row', max_row)
-        row_holes = row_cllt.holes
-        min_col = None
-        max_col = None
-        image_w = None
-        image_h = None
-        for row, row_path in row_cllt.paths.items():
-            if row in row_holes:
-                continue
-            row_path = os.path.join(atlas_root, row_path)
-            #print('row_path:', row_path)
-            col_cllt = _get_collection_info(row_path, 'col',
-                row_cllt.path_template)
-            this_min_col = int(col_cllt.min_item)
-            this_max_col = int(col_cllt.max_item)
-            if min_col is None or this_min_col < min_col:
-                min_col = this_min_col
-            if max_col is None or this_max_col > max_col:
-                max_col = this_max_col
-            if image_w is None and col_cllt.image_w:
-                image_w = col_cllt.image_w
-                image_h = col_cllt.image_h
-        #Insert level information
-        c.execute(QUERY_INSERT_HISTOLOGY_LEVEL, (hist_mod_id, level,
-            image_w, image_h, min_row, max_row, min_col, max_col))
-    images = []
-    for sl, path_sl in zip(range(start_range, end_range + 1), path_sl_range):
-        if path_sl in slice_cllt.paths:
-            images.append((hist_mod_id, sl,
-                os.path.join(slice_cllt.path_template.format(slice=path_sl),
-                    'level_{level}', 'row_{row}', 'col_{col}.png'),
-                os.path.join(slice_cllt.path_template.format(slice=path_sl),
-                    'level_{level}', 'preview.png')))
-    psycopg2.extras.execute_values(c, QUERY_INSERT_HISTOLOGY_SLICE,
-        images, page_size=PAGE_SIZE)
-
-def _convert_dict_to_ordered_list(d):
-    L = []
-    for _, item in sorted(d.items()):
-        L.append(item)
-    return L
+    for stain, stain_axis in modality.axes.items():
+        #Get the slice information
+        stain_config = modality.config.get(stain, {})
+        slice_axis = stain_axis.get_subaxis('coronal')
+        print('update meta:', slice_axis.path)
+        if stain_config.get('reverse_slices', False):
+            print('reversing', stain, 'histology slices')
+            slice_axis.reverse_paths()
+        min_slice = int(slice_axis.min_item)
+        max_slice = int(slice_axis.max_item)
+        attrib_id = _insert_attribute_row(db_conn, slice_axis.attrib)
+        hist_stain_id = HIST_STAINS[stain]
+        c.execute(QUERY_INSERT_HISTOLOGY_MODALITY, (modality.subject.id,
+            hist_stain_id, HIST_MAGNIFICATION_FACTOR, min_slice, max_slice,
+            attrib_id))
+        hist_mod_id = c.fetchone()[0]
+        #Insert each histology level
+        level_axis = slice_axis.subaxes['level']
+        if level_axis.paths:
+            for level in range(level_axis.min_item, level_axis.max_item):
+                row_axis = level_axis.subaxes[level]
+                col_axis = row_axis.subaxes['column']
+                min_row = row_axis.min_item
+                max_row = row_axis.max_item
+                min_col = col_axis.min_item
+                max_col = col_axis.max_item
+                c.execute(QUERY_INSERT_HISTOLOGY_LEVEL, (hist_mod_id, level,
+                    col_axis.image_w, col_axis.image_h, min_row, max_row,
+                    min_col, max_col))
+            #Insert all histology slices
+            images = [((hist_mod_id, sl,
+                col_axis.get_rel_path_template(img_path),
+                level_axis.get_rel_path_template(img_path, 'preview')))
+                for sl, img_path in slice_axis.get_relpaths()]
+            psycopg2.extras.execute_values(c, QUERY_INSERT_HISTOLOGY_SLICE,
+                images, page_size=PAGE_SIZE)
 
 def _get_axis_collection_info(slice_path):
     info = {}
@@ -964,116 +1082,131 @@ def _get_axis_collection_info(slice_path):
         info[axis] = _get_collection_info(axis_path, 'slice')
     return info
 
-def get_mr_data(db_conn, subject, mr_path, config):
-    mr_mod_info = {}
-    c = db_conn.cursor()
-    print('mr_path:', mr_path)
+def define_modality_mr(subject, mr_path, config):
+    print('scanning:', mr_path, '...')
+    mr_config = config.get('MR', {})
+    modality = subject.define_modality('MR', mr_path, mr_config)
     for mode_name in os.listdir(mr_path):
-        mode_path = os.path.join(atlas_root, mode_name)
-        print('mode_path:', mode_path)
+        mode_path = os.path.join(mr_path, mode_name)
         match = re.search('(.*)-(\d+)-(.*)', mode_name)
         if not match:
             continue
         vivo, session, contrast = match.group(1, 2, 3)
-        #print(vivo, session, contrast)
-        if contrast == 'T2':
-            mr_config = config.get('MR', {}).get('T2', {})
+        if contrast == 'DTI':
+            types_path = os.path.join(mr_path, mode_name, 'proc')
+            type_list = os.listdir(types_path)
+        else: # T2
+            types_path = os.path.join(mr_path, mode_name)
+            type_list = ['T2']
+        for mr_type_name in type_list:
+            if mr_type_name not in MR_TYPES:
+                continue
+            mr_config = config.get('MR', {}).get(mr_type_name, {})
             if mr_config.get('skip', False):
                 continue
-            slice_path = os.path.join(mr_path, mode_name)
-            axis_info = _get_axis_collection_info(slice_path)
-            mr_type_id, _ = MR_TYPES['T2']
-            if mr_type_id in mr_mod_info:
-                mr_mod_id = mr_mod_info[mr_type_id]
-            else:
-                c.execute(QUERY_INSERT_MR_MODALITY, (subject['id'], mr_type_id))
-                mr_mod_info[mr_type_id] = mr_mod_id = c.fetchone()[0]
-            get_mr_axis_data(db_conn, subject, mr_mod_id, vivo, session, None,
-                axis_info, mr_config, slice_path, 'T2')
-        elif contrast == 'DTI':
-            #Get the processes
-            #print('DTI vivo', vivo)
-            types_path = os.path.join(mr_path, mode_name, 'proc')
-            #print('types_path', types_path)
-            for mr_type_name in os.listdir(types_path):
-                if mr_type_name not in MR_TYPES:
-                    continue
-                mr_config = config.get('MR', {}).get(mr_type_name, {})
-                if mr_config.get('skip', False):
-                    continue
+            if contrast == 'DTI':
                 type_path = os.path.join(types_path, mr_type_name)
-                print('mr type path:', type_path)
-                mr_type_id, expect_volumes = MR_TYPES[mr_type_name]
-                if mr_type_id in mr_mod_info:
-                    mr_mod_id = mr_mod_info[mr_type_id]
+            else:
+                type_path = types_path
+            mr_axis = modality.get_axis(mr_type_name)
+            if not mr_axis:
+                mr_axis = modality.define_axis(mr_type_name, type_path, '')
+            _, expect_volumes = MR_TYPES[mr_type_name]
+            subfiles = os.listdir(type_path)
+            if any(axis_name in subfiles for axis_name in AXIS_NAMES):
+                has_volumes = False
+                if expect_volumes:
+                    print('expected volume folders in path {0}'.format(type_path),
+                        file=sys.stderr)
+                    sys.exit(1)
+            else:
+                has_volumes = True
+                volume_n = len(subfiles)
+                if not expect_volumes:
+                    print('did not expect volume folders in path {0}'.format(type_path),
+                        file=sys.stderr)
+                    sys.exit(1)
+            if has_volumes:
+                #Check if there is a limit on what volumes should be processed
+                limit = mr_config.get('limit_volumes')
+                if limit:
+                    limit = str(limit)
+                    subfiles = list(filter(lambda x: x == limit, subfiles))
+                    print(mr_type_name, 'limit volumes:', limit)
+            else:
+                subfiles = [None]
+            #Process each volume
+            for volume in subfiles:
+                if volume:
+                    volume_path = os.path.join(type_path, volume)
                 else:
-                    c.execute(QUERY_INSERT_MR_MODALITY, (subject['id'],
-                        mr_type_id))
-                    mr_mod_info[mr_type_id] = mr_mod_id = c.fetchone()[0]
-                subfiles = os.listdir(type_path)
-                if any(axis in subfiles for axis in AXIS_NAMES):
-                    has_volumes = 0
-                    if expect_volumes:
-                        print('expected volume folders in path {0}'.format(type_path),
-                            file=sys.stderr)
-                        sys.exit(1)
-                else:
-                    has_volumes = 1
-                    volume_n = len(subfiles)
-                    if not expect_volumes:
-                        print('did not expect volume folders in path {0}'.format(type_path),
-                            file=sys.stderr)
-                        sys.exit(1)
-                if has_volumes:
-                    limit = mr_config.get('limit_volumes')
-                    if limit:
-                        limit = str(limit)
-                        subfiles = list(filter(lambda x: x == limit, subfiles))
-                        print('limit volumes:', limit)
-                    for volume in subfiles:
-                        volume_path = os.path.join(type_path, volume)
-                        axis_info = _get_axis_collection_info(volume_path)
-                        get_mr_axis_data(db_conn, subject, mr_mod_id, vivo, session,
-                            volume, axis_info, mr_config, volume_path, mr_type_name)
-                else:
-                    axis_info = _get_axis_collection_info(type_path)
-                    get_mr_axis_data(db_conn, subject, mr_mod_id, vivo, session, None,
-                        axis_info, mr_config, type_path, mr_type_name)
+                    volume_path = type_path
+                volume_axis = mr_axis.get_subaxis(volume)
+                if not volume_axis:
+                    volume_axis = mr_axis.define_subaxis(volume,
+                        volume_path, '')
+                for axis_name in AXIS_NAMES:
+                    axis_path = os.path.join(volume_path, axis_name)
+                    axis = volume_axis.get_subaxis(axis_name)
+                    if not axis:
+                        axis = volume_axis.define_subaxis(axis_name,
+                            axis_path, '')
+                    session_name = [vivo, session]
+                    session_axis = axis.define_subaxis(session_name,
+                        axis_path, 'slice')
 
-def get_mr_axis_data(db_conn, subject, mr_mod_id, vivo, session, volume, axis_info,
-        mr_config, namespace, mr_type_name):
+def get_mr_data(db_conn, modality):
+    mr_mod_info = {}
+    mr_session_ids = {}
     c = db_conn.cursor()
-    invivo = 1 if vivo == 'invivo' else 0
-    c.execute(QUERY_INSERT_MR_SESSION, (mr_mod_id, session, invivo, volume))
-    mr_session_id = c.fetchone()[0]
-    slices = []
-    attrib = mr_config.get('attrib', {})
-    if attrib:
-        print(amr_type_name, 'attrib', attrib)
-    for axis, axis_cllt in axis_info.items():
-        axis_id = AXIS[axis]
-        image_w = axis_cllt.image_w
-        image_h = axis_cllt.image_h
-        min_slice = int(axis_cllt.min_item)
-        max_slice = int(axis_cllt.max_item)
-        thickness_in_mm = None
-        axis_attrib = _check_attributes(attrib.get(axis),
-            os.path.join(namespace, axis))
-        attrib_id = _insert_attribute_row(db_conn, axis_attrib)
-        c.execute(QUERY_INSERT_MR_VOLUME_AXIS, (mr_session_id, axis_id,
-            image_w, image_h, min_slice, max_slice, attrib_id))
-        mr_vol_axis_id = c.fetchone()[0]
-        #print(axis, 'mr_vol_axis_id', mr_vol_axis_id)
-        slices.extend((mr_vol_axis_id, sl, None)
-            for sl in axis_cllt.holes)
-        start_range, end_range = subject['volume'][axis]
-        if axis in mr_config.get('reverse_slices', []):
-            print('reversing', mr_type_name, axis, 'slices')
-            axis_cllt.reverse_paths(start_range, end_range)
-        slices.extend((mr_vol_axis_id, sl, img_path)
-            for sl, img_path in axis_cllt.paths.items())
-    psycopg2.extras.execute_values(c, QUERY_INSERT_MR_SLICE,
-        slices, page_size=PAGE_SIZE)
+    for type_name, mr_axis in modality.axes.items():
+        print('update meta:', mr_axis.path)
+        mr_type_id, expect_volumes = MR_TYPES[type_name]
+        if mr_type_id in mr_mod_info:
+            mr_mod_id = mr_mod_info[mr_type_id]
+        else:
+            c.execute(QUERY_INSERT_MR_MODALITY, (modality.subject.id,
+                mr_type_id))
+            mr_mod_info[mr_type_id] = mr_mod_id = c.fetchone()[0]
+        mr_config = modality.config.get(type_name, {})
+        for volume, volume_axis in mr_axis.subaxes.items():
+            for axis_name in AXIS_NAMES:
+                axis = volume_axis.get_subaxis(axis_name)
+                axis_id = AXIS[axis_name]
+                slices = []
+                for session_name, session_axis in axis.subaxes.items():
+                    vivo, session = session_name.split('.')
+                    invivo = 1 if vivo == 'invivo' else 0
+                    key = (mr_mod_id, session, invivo, volume)
+                    mr_session_id = mr_session_ids.get(key)
+                    if not mr_session_id:
+                        c.execute(QUERY_INSERT_MR_SESSION,
+                            (mr_mod_id, session, invivo, volume))
+                        mr_session_id = mr_session_ids[key] = c.fetchone()[0]
+                    attrib = mr_config.get('attrib', {})
+                    if attrib:
+                        print(type_name, 'attrib', attrib)
+                    image_w = session_axis.image_w
+                    image_h = session_axis.image_h
+                    min_slice = int(session_axis.min_item)
+                    max_slice = int(session_axis.max_item)
+                    axis_attrib = _check_attributes(attrib.get(axis_name),
+                        os.path.join(session_axis.path, axis_name))
+                    attrib_id = _insert_attribute_row(db_conn, axis_attrib)
+                    c.execute(QUERY_INSERT_MR_VOLUME_AXIS, (mr_session_id, axis_id,
+                        image_w, image_h, min_slice, max_slice, attrib_id))
+                    mr_vol_axis_id = c.fetchone()[0]
+                    if axis_name in mr_config.get('reverse_slices', []):
+                        s = [axis_name]
+                        if volume:
+                            s += ['volume', volume]
+                        s += [type_name, axis_name, vivo, session, 'slices']
+                        print('reversing', *s)
+                        session_axis.reverse_paths()
+                    slices.extend((mr_vol_axis_id, sl, img_path)
+                        for sl, img_path in session_axis.get_relpaths())
+                psycopg2.extras.execute_values(c, QUERY_INSERT_MR_SLICE,
+                    slices, page_size=PAGE_SIZE)
 
 def get_label_data(db_conn, subject, label_path, config):
     for label_type in os.listdir(label_path):

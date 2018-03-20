@@ -171,6 +171,7 @@ def _make_image_request(img_path, prefix='/smda/atlasimg/', content_type='image/
             #'Content-Disposition': 'filename="{0}"'.format(
             #    basename),
         }
+        app.logger.debug('headers {0}'.format(headers))
         status = STAT_OK
     else:
         headers = {'Content-Type': TEXT_HTML_CONTENT}
