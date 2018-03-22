@@ -2,14 +2,27 @@
     model.py
     Manages the smda database
 """
+import collections
 import ConfigParser
 import logging
 import os
 import psycopg2
 import psycopg2.extras
+import re
+import string
 
 from six.moves import configparser
 
+
+#This dictionary attempt to evalulate key expressions
+class EvalDict(collections.defaultdict):
+    def __missing__(self, key):
+        if not re.match(r'^\w+$', key):
+            try:
+                return eval(key, {}, self)
+            except:
+                raise KeyError(key)
+        raise KeyError(key)
 
 _app_config = configparser.ConfigParser()
 _app_config.read('/opt/smda/smda-app.cfg')
@@ -31,6 +44,12 @@ ORDER BY display_name
 
 QUERY_GET_SUBJECT_INFO = """
 SELECT subject_id, display_name FROM "subject" WHERE ui_id = (%s)
+"""
+
+QUERY_GET_SUBJECT_VOLUME_AXIS = """
+SELECT axis, start_range, end_range
+FROM "subject_volume_axis" NATURAL JOIN "subject" s NATURAL JOIN "axis" a
+WHERE s.subject_id = (%s)
 """
 
 QUERY_GET_DEFAULT_SUBJECT = """
@@ -75,6 +94,18 @@ FROM "mr_volume_axis" mva NATURAL JOIN "axis" a
 WHERE mva.mr_session_id = (%s)
 """
 
+QUERY_GET_AGGREGATE_MR_MODALITY = """
+SELECT amt.amr_type, amm.amr_mod_id
+FROM "aggregate_mr_modality" amm NATURAL JOIN "subject" s NATURAL JOIN "aggregate_mr_type" amt
+WHERE s.subject_id = (%s)
+"""
+
+QUERY_GET_AGGREGATE_MR_VOLUME_AXIS = """
+SELECT a.axis, amva.image_w, amva.image_h, amva.min_slice, amva.max_slice, amva.attrib_id
+FROM "aggregate_mr_volume_axis" amva NATURAL JOIN "axis" a
+WHERE amva.amr_mod_id = (%s)
+"""
+
 QUERY_GET_LABEL_MODALITY = """
 SELECT lt.label_type, lm.label_mod_id
 FROM "label_modality" lm NATURAL JOIN "subject" s NATURAL JOIN "label_type" lt
@@ -98,18 +129,6 @@ SELECT gs.session, gs.invivo, gs.min_slice, gs.max_slice, gs.image_w,
 gs.image_h, gs.min_row, gs.max_row, gs.min_col, gs.max_col, gs.attrib_id
 FROM "glyph_session" gs
 WHERE gs.glyph_mod_id = (%s)
-"""
-
-QUERY_GET_AGGREGATE_MR_MODALITY = """
-SELECT amt.amr_type, amm.amr_mod_id
-FROM "aggregate_mr_modality" amm NATURAL JOIN "subject" s NATURAL JOIN "aggregate_mr_type" amt
-WHERE s.subject_id = (%s)
-"""
-
-QUERY_GET_AGGREGATE_MR_VOLUME_AXIS = """
-SELECT a.axis, amva.image_w, amva.image_h, amva.min_slice, amva.max_slice, amva.attrib_id
-FROM "aggregate_mr_volume_axis" amva NATURAL JOIN "axis" a
-WHERE amva.amr_mod_id = (%s)
 """
 
 QUERY_GET_ATTRIBUTES = """
@@ -152,6 +171,13 @@ WHERE s.ui_id = (%s) AND mrt.mr_type = (%s) AND mse.session = (%s) AND mse.inviv
 AND mse.volume = (%s) AND a.axis = (%s) AND ms.slice = (%s)
 """
 
+QUERY_GET_AGGREGATE_MR_SLICE_PATH = """
+SELECT ams.file_path
+FROM "subject" s NATURAL JOIN "aggregate_mr_modality" amm NATURAL JOIN "aggregate_mr_type" amt
+NATURAL JOIN "aggregate_mr_volume_axis" amva NATURAL JOIN "axis" a NATURAL JOIN "aggregate_mr_slice" ams
+WHERE s.ui_id = (%s) AND amt.amr_type = (%s) AND a.axis = (%s) AND ams.slice = (%s)
+"""
+
 QUERY_GET_LABEL_SLICE_PATH = """
 SELECT ls.file_path
 FROM "subject" s NATURAL JOIN "label_modality" lm NATURAL JOIN "label_type" lt
@@ -176,13 +202,6 @@ QUERY_GET_GLYPH_IMAGE_PREVIEW_TEMPLATE = """
 SELECT gs.preview_path_template
 FROM "subject" s NATURAL JOIN "glyph_type" gt NATURAL JOIN "glyph_modality" gm NATURAL JOIN "glyph_session" gse NATURAL JOIN "glyph_slice" gs
 WHERE s.ui_id = (%s) AND gt.glyph_type = (%s) AND gse.session = (%s) AND gse.invivo = (%s) AND gs.slice = (%s)
-"""
-
-QUERY_GET_AGGREGATE_MR_SLICE_PATH = """
-SELECT ams.file_path
-FROM "subject" s NATURAL JOIN "aggregate_mr_modality" amm NATURAL JOIN "aggregate_mr_type" amt
-NATURAL JOIN "aggregate_mr_volume_axis" amva NATURAL JOIN "axis" a NATURAL JOIN "aggregate_mr_slice" ams
-WHERE s.ui_id = (%s) AND amt.amr_type = (%s) AND a.axis = (%s) AND ams.slice = (%s)
 """
 
 def _get_attrib(db_conn, attrib_id):
@@ -227,6 +246,7 @@ def get_subject_info(ui_id):
             info = {
                 'subject': display_name,
                 'id': str(ui_id),
+                'volume': get_subject_volume_axis(subject_id),
                 'modes': {
                     'block': get_block_info(subject_id),
                     'hist': get_hist_info(subject_id),
@@ -239,6 +259,15 @@ def get_subject_info(ui_id):
             }
     return info
 
+def get_subject_volume_axis(subject_id):
+    info = {}
+    with psycopg2.connect(connect_str) as db_conn:
+        c = db_conn.cursor()
+        c.execute(QUERY_GET_SUBJECT_VOLUME_AXIS, (subject_id,))
+        for axis, start_range, end_range in c.fetchall():
+            info[axis] = [start_range, end_range]
+    return info
+
 def get_block_info(subject_id):
     logger = logging.getLogger('smda_web_server')
     info = None
@@ -248,8 +277,9 @@ def get_block_info(subject_id):
         row = c.fetchone()
         if row:
             block_mod_id, image_w, image_h, min_slice, max_slice, attrib_id = row
-            c.execute(QUERY_GET_BLOCK_HOLES, (block_mod_id,))
-            slice_holes = list(c.fetchall())
+            #c.execute(QUERY_GET_BLOCK_HOLES, (block_mod_id,))
+            #slice_holes = list(c.fetchall())
+            slice_holes = []
             logger.debug('got attrib_id: {0}'.format(attrib_id))
             #logger.debug('slice holes: {0}'.format(slice_holes))
             info = {
@@ -262,7 +292,6 @@ def get_block_info(subject_id):
             if attrib_id:
                 info['attrib'] = _get_attrib(db_conn, attrib_id)
     return info
-
 
 def get_hist_info(subject_id):
     logger = logging.getLogger('smda_web_server')
@@ -358,6 +387,37 @@ def get_mr_info(subject_id):
             info = mr
     return info
 
+def get_aggregate_mr_info(subject_id):
+    logger = logging.getLogger('smda_web_server')
+    #logger.debug('get_mr_info for {0}'.format(subject_id))
+    amr = None
+    with psycopg2.connect(connect_str) as db_conn:
+        c = db_conn.cursor()
+        c2 = db_conn.cursor()
+        c.execute(QUERY_GET_AGGREGATE_MR_MODALITY, (subject_id,))
+        if c.rowcount:
+            amr = {}
+            for amr_type, amr_mod_id in c.fetchall():
+                #logger.debug('retrieved: {0} {1} {2} {3} {4}'.format(mr_type,
+                #    has_volumes, session, invivo, volume))
+                amr_info = amr.get(amr_type)
+                if not amr_info:
+                    amr[amr_type] = amr_info = {}
+                axis_info = amr_info.get('all_sessions')
+                if not axis_info:
+                    amr_info['all_sessions'] = axis_info = {}
+                c2.execute(QUERY_GET_AGGREGATE_MR_VOLUME_AXIS, (amr_mod_id,))
+                for axis, image_w, image_h, min_slice, max_slice, attrib_id in c2.fetchall():
+                    axis_info[axis] = {
+                        'image_w': image_w,
+                        'image_h': image_h,
+                        'min_slice': min_slice,
+                        'max_slice': max_slice,
+                    }
+                    if attrib_id:
+                        axis_info[axis]['attrib'] = _get_attrib(db_conn, attrib_id)
+    return amr
+
 def get_label_info(subject_id):
     logger = logging.getLogger('smda_web_server')
     #logger.debug('get_label_info for {0}'.format(subject_id))
@@ -424,45 +484,14 @@ def get_glyph_info(subject_id):
                     'sessions': sessions,
                     'session_names': session_names,
                 }
-            logger.debug('glyphs: {0}'.format(glyphs))
+            #logger.debug('glyphs: {0}'.format(glyphs))
     return glyphs
-
-def get_aggregate_mr_info(subject_id):
-    logger = logging.getLogger('smda_web_server')
-    #logger.debug('get_mr_info for {0}'.format(subject_id))
-    amr = None
-    with psycopg2.connect(connect_str) as db_conn:
-        c = db_conn.cursor()
-        c2 = db_conn.cursor()
-        c.execute(QUERY_GET_AGGREGATE_MR_MODALITY, (subject_id,))
-        if c.rowcount:
-            amr = {}
-            for amr_type, amr_mod_id in c.fetchall():
-                #logger.debug('retrieved: {0} {1} {2} {3} {4}'.format(mr_type,
-                #    has_volumes, session, invivo, volume))
-                amr_info = amr.get(amr_type)
-                if not amr_info:
-                    amr[amr_type] = amr_info = {}
-                axis_info = amr_info.get('all_sessions')
-                if not axis_info:
-                    amr_info['all_sessions'] = axis_info = {}
-                c2.execute(QUERY_GET_AGGREGATE_MR_VOLUME_AXIS, (amr_mod_id,))
-                for axis, image_w, image_h, min_slice, max_slice, attrib_id in c2.fetchall():
-                    axis_info[axis] = {
-                        'image_w': image_w,
-                        'image_h': image_h,
-                        'min_slice': min_slice,
-                        'max_slice': max_slice,
-                    }
-                    if attrib_id:
-                        axis_info[axis]['attrib'] = _get_attrib(db_conn, attrib_id)
-    return amr
 
 def _check_image_path(img_path):
     logger = logging.getLogger('smda_web_server')
     #logger.debug('img_path: {0}'.format(img_path))
     if img_path:
-        full_img_path = os.path.join(atlas_root, img_path)
+        #full_img_path = os.path.join(atlas_root, img_path)
         #if os.path.exists(full_img_path):
         #    logger.debug('path exists: {0}'.format(full_img_path))
         #    return img_path
@@ -492,7 +521,9 @@ def get_hist_image_path(ui_id, stain, slice_i, level, row, col):
             file_path_template = c.fetchone()[0]
             logger.debug('hist image: got file_path_template: {0}'.format(
                 file_path_template))
-            img_path = file_path_template.format(level=level, row=row, col=col)
+            formatter = string.Formatter()
+            img_path = formatter.vformat(file_path_template, None,
+                EvalDict(level=level, row=row, col=col))
             logger.debug('hist image: got img_path: {0}'.format(img_path))
     return _check_image_path(img_path)
 
@@ -506,7 +537,9 @@ def get_hist_image_preview_path(ui_id, stain, slice_i, level):
             preview_path_template = c.fetchone()[0]
             logger.debug('hist preview: got preview_path_template: {0}'.format(
                 preview_path_template))
-            img_path = preview_path_template.format(level=level)
+            formatter = string.Formatter()
+            img_path = formatter.vformat(preview_path_template, None,
+                EvalDict(level=level))
             logger.debug('hist preview: got img_path: {0}'.format(img_path))
     return _check_image_path(img_path)
 
@@ -534,6 +567,19 @@ def get_mr_image_path(ui_id, proc, session, vivo, volume, axis, slice_i):
 
 def get_mr_preview_image_path(ui_id, proc, session, vivo, volume, axis, slice_i):
     return get_mr_image_path(ui_id, proc, session, vivo, volume, axis, slice_i)
+
+def get_aggregate_mr_image_path(ui_id, proc, axis, slice_i):
+    img_path = None
+    with psycopg2.connect(connect_str) as db_conn:
+        c = db_conn.cursor()
+        c.execute(QUERY_GET_AGGREGATE_MR_SLICE_PATH, (ui_id, proc, axis,
+            slice_i))
+        if c.rowcount:
+            img_path = c.fetchone()[0]
+    return _check_image_path(img_path)
+
+def get_aggregate_mr_image_preview_path(ui_id, proc, axis, slice_i):
+    return get_aggregate_mr_image_path(ui_id, proc, axis, slice_i)
 
 def get_label_image_path(ui_id, label_type, axis, slice_i):
     logger = logging.getLogger('smda_web_server')
@@ -581,16 +627,3 @@ def get_glyph_image_preview_path(ui_id, glyph_type, vivo, session, slice_i, row,
             preview_path_template = c.fetchone()[0]
             img_path = preview_path_template
     return _check_image_path(img_path)
-
-def get_aggregate_mr_image_path(ui_id, proc, axis, slice_i):
-    img_path = None
-    with psycopg2.connect(connect_str) as db_conn:
-        c = db_conn.cursor()
-        c.execute(QUERY_GET_AGGREGATE_MR_SLICE_PATH, (ui_id, proc, axis,
-            slice_i))
-        if c.rowcount:
-            img_path = c.fetchone()[0]
-    return _check_image_path(img_path)
-
-def get_aggregate_mr_image_preview_path(ui_id, proc, axis, slice_i):
-    return get_aggregate_mr_image_path(ui_id, proc, axis, slice_i)

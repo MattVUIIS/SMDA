@@ -531,6 +531,9 @@ ViewerCanvas.prototype.drawMinimap = function() {
         if(!subslice || !subslice.preview.is_ready || subslice.preview.tex === null) {
             continue;
         }
+        if(view.modality == 'hist') {
+            //console.log('histology preview draw ' + subpanel.pos_bf.item_n);
+        }
         //Set up the view matrix
         let attrib = subpanel.attrib;
         let xscale = (attrib && ('horizontal_flip' in attrib) ? -1 : 1)

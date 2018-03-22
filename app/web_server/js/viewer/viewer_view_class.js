@@ -67,7 +67,7 @@ ViewerViewClass.prototype.activateDefaultViews = function() {
     }
 }
 ViewerViewClass.prototype.setVivoAndSession = function(vivo, session, volume) {
-    for(let key of this.views) {
+    for(let key in this.views) {
         let view = this.views[key];
         if(view.modality == 'MR') {
             view.setVivoAndSession(vivo, session, volume);

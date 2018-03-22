@@ -391,6 +391,9 @@ ViewerContext.prototype.onNewSubjectReady = function(subject_id, resource) {
         view_class.updateVisibilityFromViews();
         view_class.activateDefaultViews();
     }
+    for(let axis in this.canvas) {
+        this.checkSliceBounds(axis);
+    }
     this.updatePageState();
     return this.view_params;
 }
@@ -424,38 +427,14 @@ ViewerContext.prototype.checkPanBounds = function(axis, axis_prefix) {
 };
 ViewerContext.prototype.checkSliceBounds = function(axis, axis_prefix) {
     let canvas = this.canvas[axis];
-    let min_slice = Infinity;
-    let max_slice = -Infinity;
     axis_prefix = axis_prefix !== undefined ? axis_prefix :
         this.axis_prefixes[this.axes.indexOf(axis)];
     let slice_name = axis_prefix + 'slice';
     let min_slice_name = 'min_' + slice_name;
     let max_slice_name = 'max_' + slice_name;
     //console.log('setting ' + axis + ' slice bounds');
-    for(let key in this.views) {
-        let view = this.views[key];
-        if(this.selectable_views.has(view.key)) {
-            let panel = view.panels[axis];
-            if(!panel) continue;
-            //console.log(axis + ' ' + view.name + ' check min_slice ' + panel.min_slice + ' max_slice ' +
-            //    panel.max_slice);
-            if((panel.min_slice !== null) && panel.min_slice < min_slice) {
-                min_slice = panel.min_slice;
-                //console.log(axis + ' ' + view.name + ' decreased min_slice to ' + min_slice);
-            }
-            if((panel.max_slice !== null) && panel.max_slice > max_slice) {
-                max_slice = panel.max_slice;
-                //console.log(axis + ' ' + view.name + ' increased max_slice to ' + max_slice);
-            }
-        }
-    }
-    if((min_slice == Infinity) || (max_slice == -Infinity)) {
-        min_slice = 1;
-        max_slice = 1;
-        //console.log('set min and max slice to ' + min_slice + ' and ' + max_slice);
-    }
-    this[min_slice_name] = min_slice;
-    this[max_slice_name] = max_slice;
+    let min_slice = this[min_slice_name] = this.resource.volume[axis][0];
+    let max_slice = this[max_slice_name] = this.resource.volume[axis][1];
     //console.log(axis + ' min slice ' + min_slice + ' max slice ' + max_slice);
     //console.log('calling ' + slice_name + ' setSlice with ' + this[slice_name]);
     this.setSlice(axis, this[slice_name], axis_prefix);
@@ -801,12 +780,13 @@ ViewerContext.prototype.setSessionName = function(session_name) {
     let [vivo, session] = session_name.split('-', 2);
     this.view_params.session = session;
     this.view_params.vivo = vivo;
+    //console.log('setSessionName ' + session_name);
     if('mri' in this.view_classes) {
-        this.view_classes['mri'].setVivoAndSession(vivo, session, view.volume);
+        this.view_classes['mri'].setVivoAndSession(vivo, session, null);
     }
     if('accessory-overlay' in this.view_classes) {
-        this.view_classes['accessory-overlay'].setVivoAndSession(vivo, session,
-            view.volume);
+        this.view_classes['accessory-overlay'].setVivoAndSession(vivo,
+            session, null);
     }
 }
 ViewerContext.prototype.drawScene = function() {

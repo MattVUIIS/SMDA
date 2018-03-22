@@ -42,7 +42,7 @@ ViewContours.prototype._onContoursLoaded = function(response) {
     this.is_ready = true; //Mark the image as ready to display
 }
 ViewContours.prototype._onContoursFailed = function(response) {
-    console.log(this.url + 'contours failed to load: ' + this.url);
+    console.log('contours failed to load: ' + this.url);
     this.map = null;
     this.contour_bf = null;
     this.contour_arr = null;

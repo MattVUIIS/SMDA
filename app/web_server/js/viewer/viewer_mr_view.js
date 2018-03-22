@@ -67,6 +67,9 @@ MRView.prototype.loadResource = function(resource) {
         {'update_bounds': false});
 }
 MRView.prototype.setSessionName = function(session_name, volume, options) {
+    if(volume === null) {
+        volume = this.volume;
+    }
     if(session_name.indexOf('-') != -1) {
         let [vivo, session] = session_name.split('-', 2);
         return this.setVivoAndSession(vivo, session, volume, options);
