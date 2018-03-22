@@ -1,5 +1,6 @@
-function View(context, view_class, modality, submodality, name, panels) {
+function View(context, id, view_class, modality, submodality, name, panels) {
     this.context = context;
+    this.id = id;
     this.view_class = view_class;
     this.modality = modality;
     this.submodality = submodality;
@@ -37,7 +38,7 @@ function View(context, view_class, modality, submodality, name, panels) {
 View.prototype.loadResource = function(resource) {}
 View.prototype.checkPanBounds = function(canvas) {}
 View.prototype.getLayer = function() {
-    return this.context.layers.indexOf(this.key);
+    return this.context.layers.indexOf(this.id);
 }
 View.prototype.activate = function() {
     //console.log('activate view ' + this.modality);

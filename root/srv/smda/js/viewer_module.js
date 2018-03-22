@@ -237,9 +237,9 @@
             '&{block_a:int}&{hist_a:int}&{MR_a:int}&{label_a:int}&{glyph_a:int}',
           params: {
             'subject': 'default',
-            'view': 'block',
-            'layers': 'block,hist',
-            'slice': 1,
+            'view': 'BL',
+            'layers': 'BL,HI',
+            'slice': 128,
             'ax_slice': 1,
             'sa_slice': 1,
             'zoom': 1,

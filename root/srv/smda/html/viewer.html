@@ -91,14 +91,14 @@
           <div ng-show="viewer.context.session_names.length">
             <label class="viewerLabel">
               Sessions
+              <select id="sessionDropDown" class="viewerLayerDropDown"
+                  ng-model="viewer.context.session_name"
+                  ng-change="viewer.context.setSessionName(viewer.context.session_name)">
+                <option ng-repeat="session_name in viewer.context.session_names" value="{{session_name}}">
+                  {{session_name}}
+                </option>
+              </select>
             </label>
-            <select id="sessionDropDown" class="viewerLayerDropDown"
-                ng-model="viewer.context.session_name"
-                ng-change="viewer.context.setSessionName(viewer.context.session_name)">
-              <option ng-repeat="session_name in viewer.context.session_names" value="{{session_name}}">
-                {{session_name}}
-              </option>
-            </select>
           </div>
           <!-- View class box -->
           <label class="viewerLabel">
@@ -134,7 +134,7 @@
                 dnd-handle/>
               <input type="checkbox" class="viewerCheckboxInput"
                 ng-model="view_layer.active"
-                ng-change="viewer.context.toggleView(view_layer.key)"
+                ng-change="viewer.context.toggleView(view_layer.id)"
                 dnd-nodrag/>
               <span ng-class="view_layer.getTextClass()">
                 {{view_layer.name}}

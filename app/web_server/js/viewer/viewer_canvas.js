@@ -673,8 +673,8 @@ ViewerCanvas.prototype.updatePlane = function() {
     this.plane.bottom = this.ortho.bottom;
     //console.log(this.axis + ' canvas border default ' + panel_left + ', ' +
     //    panel_right + ', ' + panel_bottom + ', ' + panel_top);
-    for(let key in this.context.views) {
-        let view = this.context.views[key];
+    for(let id in this.context.views) {
+        let view = this.context.views[id];
         if(this.axis in view.panels) {
             let panel = view.panels[this.axis];
             if(panel.left_border != null) { //TODO: Should check if panel is null?

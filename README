@@ -9,6 +9,9 @@ The volumetric data must be made available to the VM under its /smda directory.
 This directory can be configured in app/web_server/smda_web_server.cfg. The
 required structure of the volumetric data is described in <another document>.
 
+The meta information is set up using the 'meta_updater' script under the
+app/web_server directory of this project.
+
 ================================================================================
 Installation
 ================================================================================
@@ -40,19 +43,22 @@ root/srv/smda/js folder:
 
 $ make
 
-Then you can copy all of the static files (i.e. js, css, html) files under
-root/srv/smda to the VM
+Then you can copy all of the static files (i.e. js, css, html) files as well
+as the configuration files under root/srv/smda to the VM
 
 $ copystatic
+$ copyconfig
 
-When changes are made to the server python code, you can copy and restart the
-server with the following command:
+At this point, you may want to update the meta information. From the server
+(i.e. ssh login) you can update the web server static content hashes as well:
+
+$ python app/web_server/meta_updater --no-ask-pass
+$ python app/web_server/update_hashes
+
+Finally, when changes are made to the server python code, you must copy the
+code over and restart the server with the following command:
 
 $ copyweb
-
-If you ever need to recopy any configuration files, use this command:
-
-$ copyconfig
 
 To view various logs from your host machine:
 

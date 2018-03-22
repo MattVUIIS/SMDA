@@ -924,8 +924,12 @@ def get_meta_data(root_path, subject_list, modality_list, no_ask_pass):
             if cache:
                 cache.delete('subject_info[{0}]'.format(ui_id))
         print('subjects:')
+        for subject in atlas_root.subjects.values():
+            print('{0} -> display_name: {1}, ui_id: {2}, volume: {3}'.format(
+                subject.name, subject.display_name, subject.ui_id,
+                subject.volume))
         #pprint.pprint(atlas_root.subjects)
-        pprint.pprint(atlas_root.get_pp_obj())
+        #pprint.pprint(atlas_root.get_pp_obj())
         if atlas_root.subjects:
             #The default subject is the one specified in the configuration
             #If not specified, then the default is the first subject
@@ -1079,8 +1083,7 @@ def get_hist_data(db_conn, modality):
         #Insert each histology level
         level_axis = slice_axis.subaxes['level']
         if level_axis.paths:
-            for level in range(level_axis.min_item, level_axis.max_item):
-                row_axis = level_axis.subaxes[level]
+            for level, row_axis in level_axis.subaxes.items():
                 col_axis = row_axis.subaxes['column']
                 c.execute(QUERY_INSERT_HISTOLOGY_LEVEL, (hist_mod_id, level,
                     col_axis.image_w, col_axis.image_h,
@@ -1100,8 +1103,8 @@ def define_modality_mr(subject, mr_path, mr_config):
     for mode_name in os.listdir(mr_path):
         if mode_name not in MR_TYPES:
             continue
-        mr_type_config = modality.config.get(mode_name, {})
-        if mr_type_config.get('skip', False):
+        mode_config = modality.config.get(mode_name, {})
+        if mode_config.get('skip', False):
             print('skipping', mode_name)
             continue
         mode_path = os.path.join(mr_path, mode_name)
@@ -1109,23 +1112,21 @@ def define_modality_mr(subject, mr_path, mr_config):
         mr_axis = modality.define_axis(mode_name, mode_path, '')
         volumes = os.listdir(mode_path)
         #Check if there is a limit on what volumes should be processed
-        limit = mr_type_config.get('limit_volumes')
+        limit = mode_config.get('limit_volumes')
         if limit:
             limit = str(limit)
             volumes = list(filter(lambda x: x == limit, volumes))
             print(mode_name, 'limit volumes:', limit)
         for volume in volumes:
             volume_path = os.path.join(mode_path, volume)
-            if not has_volumes:
-                volume = None
-            volume_axis = mr_axis.define_subaxis(volume,
-                volume_path, '')
+            volume_axis = mr_axis.define_subaxis(
+                has_volumes and volume or None, volume_path, '')
             for vivo in os.listdir(volume_path):
                 if vivo not in ('invivo', 'exvivo'):
                     continue
                 vivo_path = os.path.join(volume_path, vivo)
                 for session in os.listdir(vivo_path):
-                    session_name = '-'.join([vivo, session])
+                    session_name = vivo + '-' + session
                     session_path = os.path.join(vivo_path, session)
                     session_axis = volume_axis.define_subaxis(session_name,
                         session_path, '')
@@ -1318,7 +1319,7 @@ def get_glyph_data(db_conn, modality):
                 invivo, slice_axis.min_item, slice_axis.max_item,
                 col_axis.image_w, col_axis.image_h,
                 row_axis.min_item, row_axis.max_item,
-                col_axis.min_item, col_axis.min_item, attrib_id))
+                col_axis.min_item, col_axis.max_item, attrib_id))
             session_id = c.fetchone()[0]
 
             #Insert glyph slices

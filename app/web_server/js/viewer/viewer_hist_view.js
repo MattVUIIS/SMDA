@@ -18,8 +18,8 @@ ViewHistPanel.prototype.buildMosaicTemplateURL = function(url_start,
         String(col)].join('/');
 }
 
-function HistView(context, view_class) {
-	View.call(this, context, view_class, 'hist', '', 'Histology', {
+function HistView(context, id, view_class) {
+	View.call(this, context, id, view_class, 'hist', '', 'Histology', {
         'coronal': new ViewHistPanel(this, context.canvas.coronal),
     });
 }

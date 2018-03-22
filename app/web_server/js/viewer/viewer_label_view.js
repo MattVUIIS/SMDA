@@ -1,5 +1,5 @@
-function LabelView(context, view_class, submodality, name) {
-    View.call(this, context, view_class, 'label', submodality, name, {
+function LabelView(context, id, view_class, submodality, name) {
+    View.call(this, context, id, view_class, 'label', submodality, name, {
         'coronal': new ViewerLabelPanel(this, context.canvas.coronal),
         'axial': new ViewerLabelPanel(this, context.canvas.axial),
         'sagittal': new ViewerLabelPanel(this, context.canvas.sagittal),

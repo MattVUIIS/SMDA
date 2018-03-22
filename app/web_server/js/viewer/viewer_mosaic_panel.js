@@ -185,9 +185,9 @@ ViewerMosaicPanel.prototype.draw = function() {
                 this.mv_matrix);
             gl.bindTexture(gl.TEXTURE_2D, mosaic_piece.tex);
             //Prepare the position attribute pointer
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.pos_bf);
+            gl.bindBuffer(gl.ARRAY_BUFFER, canvas.pos_bf);
             gl.vertexAttribPointer(shader.attrib['aPosition'],
-                this.pos_bf.item_sz, gl.FLOAT, false, 0, 0);
+                canvas.pos_bf.item_sz, gl.FLOAT, false, 0, 0);
             //Prepare the texture attribute pointer
             gl.bindBuffer(gl.ARRAY_BUFFER, this.texcoord_bf);
             gl.vertexAttribPointer(shader.attrib['aTexCoord'],
@@ -196,7 +196,7 @@ ViewerMosaicPanel.prototype.draw = function() {
                 //console.log('histology draw ' + this.pos_bf.item_n);
             }
             //Draw the ABO as a triangle strip
-            gl.drawArrays(gl.TRIANGLES, 0, this.pos_bf.item_n);
+            gl.drawArrays(gl.TRIANGLES, 0, canvas.pos_bf.item_n);
         }
     }
     gl.disableVertexAttribArray(shader.attrib['aTexCoord']);

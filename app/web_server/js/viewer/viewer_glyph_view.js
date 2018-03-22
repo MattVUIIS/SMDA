@@ -17,8 +17,8 @@ ViewGlyphPanel.prototype.buildMosaicTemplateURL = function(url_start,
     return [url_start, String(row), String(col)].join('/');
 }
 
-function GlyphView(context, view_class, submodality, name) {
-	View.call(this, context, view_class, 'glyph', submodality, name, {
+function GlyphView(context, id, view_class, submodality, name) {
+	View.call(this, context, id, view_class, 'glyph', submodality, name, {
 		'coronal': new ViewGlyphPanel(this, context.canvas.coronal),
 	});
 }

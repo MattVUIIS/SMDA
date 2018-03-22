@@ -18,8 +18,8 @@ ViewerMRPanel.prototype.buildPreviewTemplateURL = function(url_start,
         .join('/');
 };
 
-function MRView(context, view_class, submodality, name) {
-	View.call(this, context, view_class, 'MR', submodality, name, {
+function MRView(context, id, view_class, submodality, name) {
+	View.call(this, context, id, view_class, 'MR', submodality, name, {
         'coronal': new ViewerMRPanel(this, context.canvas.coronal),
         'axial': new ViewerMRPanel(this, context.canvas.axial),
         'sagittal': new ViewerMRPanel(this, context.canvas.sagittal),

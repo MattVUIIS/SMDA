@@ -17,8 +17,8 @@ ViewerAMRPanel.prototype.buildPreviewTemplateURL = function(url_start,
         .join('/');
 };
 
-function AggregateMRView(context, view_class, submodality, name) {
-	View.call(this, context, view_class, 'aggregateMR', submodality, name, {
+function AggregateMRView(context, id, view_class, submodality, name) {
+	View.call(this, context, id, view_class, 'aggregateMR', submodality, name, {
         'coronal': new ViewerAMRPanel(this, context.canvas.coronal),
         'axial': new ViewerAMRPanel(this, context.canvas.axial),
         'sagittal': new ViewerAMRPanel(this, context.canvas.sagittal),
