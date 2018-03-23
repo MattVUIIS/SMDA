@@ -545,8 +545,8 @@ ViewerCanvas.prototype.drawMinimap = function() {
         //angle = -90 * Math.PI / 180;
         mat4.identity(this.mv_matrix);
         mat4.translate(this.mv_matrix, this.mv_matrix, [0, 0, 0]);
-        mat4.rotate(this.mv_matrix, this.mv_matrix, angle, [0, 0, 1]);
         mat4.scale(this.mv_matrix, this.mv_matrix, [xscale, yscale, 1]);
+        mat4.rotate(this.mv_matrix, this.mv_matrix, angle, [0, 0, 1]);
         gl.uniformMatrix4fv(shader.uniform['uPMatrix'], false, this.p_matrix);
         gl.uniformMatrix4fv(shader.uniform['uMVMatrix'], false, this.mv_matrix);
         //Set up texture and alpha

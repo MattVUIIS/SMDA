@@ -44,6 +44,7 @@ def show_image_and_contours(img, contours):
 """
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
+AXIS_NAMES = ('coronal', 'axial', 'sagittal')
 
 def read_config(yaml_path):
     config = {}
@@ -62,7 +63,8 @@ def read_config(yaml_path):
             file=sys.stderr)
     return config
 
-def get_label_data(label_colors, label_path, config, overwrite_files=False):
+def get_label_data(label_colors, label_path, subject_config,
+        overwrite_files=False):
     label_types = [
         'roi',
         'MR',
@@ -74,9 +76,9 @@ def get_label_data(label_colors, label_path, config, overwrite_files=False):
     for label_type in os.listdir(label_path):
         path = os.path.join(label_path, label_type)
         if label_type in label_types:
-            label_config = config.get('labels', {}).get(label_type, {})
+            label_config = subject_config.get('labels', {}).get(label_type, {})
             if not label_config.get('skip', False):
-                for axis in ['coronal', 'axial', 'sagittal']:
+                for axis in AXIS_NAMES:
                     axis_path = os.path.join(path, axis)
                     _write_contour_data(axis, axis_path, label_config,
                         label_type, label_colors)
@@ -131,18 +133,18 @@ def _write_contour_data(axis, axis_path, label_config, label_type,
             print(slice_contours_path, 'resizing image')
             img = img.resize((img.size[0] * scale, img.size[1] * scale))
             #Handle attributes
-            rotate = axis_attrib.get('rotate')
-            if rotate:
-                verb, angle = rotate.split()
-                angle = float(angle)
-                print(slice_contours_path, 'rotate', rotate)
-                img = img.rotate(angle * (-1, 1)[verb == 'left'])
-            if axis_attrib.get('horizontal_flip', False):
-                print(slice_contours_path, 'horizontal_flip')
-                img = img.transpose(PIL.Image.FLIP_LEFT_RIGHT)
-            if axis_attrib.get('vertical_flip', False):
-                print(slice_contours_path, 'vertical_flip')
-                img = img.transpose(PIL.Image.FLIP_TOP_BOTTOM)
+            #rotate = axis_attrib.get('rotate')
+            #if rotate:
+            #    verb, angle = rotate.split()
+            #    angle = float(angle)
+            #    print(slice_contours_path, 'rotate', rotate)
+            #    img = img.rotate(angle * (-1, 1)[verb == 'left'])
+            #if axis_attrib.get('horizontal_flip', False):
+            #    print(slice_contours_path, 'horizontal_flip')
+            #    img = img.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+            #if axis_attrib.get('vertical_flip', False):
+            #    print(slice_contours_path, 'vertical_flip')
+            #    img = img.transpose(PIL.Image.FLIP_TOP_BOTTOM)
             #Compare the colors in the image and make a mask
             colors = [x[1] for x in img.getcolors()]
             img_arr = np.array(img)
@@ -224,19 +226,25 @@ if __name__ == '__main__':
             }
             label_colors['{0}_{1}_{2}'.format(r, g, b)] = name
 
-    if get_subjects:
-        subject_list = get_subjects
-    else:
-        subject_list = sorted(os.listdir(atlas_root))
+    meta_config_path = os.path.join(atlas_root, 'smda.yaml')
+    meta_config = read_config(meta_config_path)
+    subjects_config = meta_config.get('subjects')
 
-    for subject in subject_list:
-        subject_path = os.path.join(atlas_root, subject)
+    if options.subject:
+        subjects_config = [config for config in subjects_config
+            if config.get('name') in options.subject]
+
+    for subject_config in subjects_config:
+        subject_name = subject_config.get('name')
+        if not subject_name:
+            continue
+        subject_path = os.path.join(atlas_root, subject_name)
         if not os.path.isdir(subject_path):
             continue
-        subject_config_path = os.path.join(subject_path, 'config.yaml')
-        config = read_config(subject_config_path)
+        #subject_config_path = os.path.join(subject_path, 'config.yaml')
+        #config = read_config(subject_config_path)
         label_path = os.path.join(subject_path, 'labels')
         if os.path.isdir(label_path):
-            get_label_data(label_colors, label_path, config,
+            get_label_data(label_colors, label_path, subject_config,
                 overwrite_files=overwrite_files)
     print('done')
