@@ -531,6 +531,9 @@ ViewerCanvas.prototype.drawMinimap = function() {
         if(!subslice || !subslice.preview.is_ready || subslice.preview.tex === null) {
             continue;
         }
+        if(view.modality == 'hist') {
+            //console.log('histology preview draw ' + subpanel.pos_bf.item_n);
+        }
         //Set up the view matrix
         let attrib = subpanel.attrib;
         let xscale = (attrib && ('horizontal_flip' in attrib) ? -1 : 1)
@@ -542,8 +545,8 @@ ViewerCanvas.prototype.drawMinimap = function() {
         //angle = -90 * Math.PI / 180;
         mat4.identity(this.mv_matrix);
         mat4.translate(this.mv_matrix, this.mv_matrix, [0, 0, 0]);
-        mat4.rotate(this.mv_matrix, this.mv_matrix, angle, [0, 0, 1]);
         mat4.scale(this.mv_matrix, this.mv_matrix, [xscale, yscale, 1]);
+        mat4.rotate(this.mv_matrix, this.mv_matrix, angle, [0, 0, 1]);
         gl.uniformMatrix4fv(shader.uniform['uPMatrix'], false, this.p_matrix);
         gl.uniformMatrix4fv(shader.uniform['uMVMatrix'], false, this.mv_matrix);
         //Set up texture and alpha
@@ -670,8 +673,8 @@ ViewerCanvas.prototype.updatePlane = function() {
     this.plane.bottom = this.ortho.bottom;
     //console.log(this.axis + ' canvas border default ' + panel_left + ', ' +
     //    panel_right + ', ' + panel_bottom + ', ' + panel_top);
-    for(let key in this.context.views) {
-        let view = this.context.views[key];
+    for(let id in this.context.views) {
+        let view = this.context.views[id];
         if(this.axis in view.panels) {
             let panel = view.panels[this.axis];
             if(panel.left_border != null) { //TODO: Should check if panel is null?

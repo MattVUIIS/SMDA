@@ -3,5 +3,6 @@ session.key
 *.swp
 *.swo
 *.log
-.DS_Store
+*.DS_Store
 /smda
+CHANGES

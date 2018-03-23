@@ -192,6 +192,9 @@ ViewerMosaicPanel.prototype.draw = function() {
             gl.bindBuffer(gl.ARRAY_BUFFER, this.texcoord_bf);
             gl.vertexAttribPointer(shader.attrib['aTexCoord'],
                 this.texcoord_bf.item_sz, gl.FLOAT, false, 0, 0);
+            if(view.modality == 'hist') {
+                //console.log('histology draw ' + this.pos_bf.item_n);
+            }
             //Draw the ABO as a triangle strip
             gl.drawArrays(gl.TRIANGLES, 0, canvas.pos_bf.item_n);
         }

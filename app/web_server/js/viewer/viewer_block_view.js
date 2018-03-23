@@ -12,8 +12,8 @@ ViewerBlockPanel.prototype.buildPreviewTemplateURL = function(url_start,
         'preview'].join('/');
 };
 
-function BlockView(context, view_class) {
-	View.call(this, context, view_class, 'block', '', 'Block', {
+function BlockView(context, id, view_class) {
+	View.call(this, context, id, view_class, 'block', '', 'Block', {
         'coronal': new ViewerBlockPanel(this, context.canvas.coronal),
     });
 }

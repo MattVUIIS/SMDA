@@ -84,7 +84,8 @@ ROUTE_MR_NONVOLUME_PREVIEW_IMAGE = ('/i/<ui_id>/MR/<proc>/<vivo>/'
 ROUTE_LABEL_IMAGE = ('/i/<ui_id>/label/<label_type>/<axis>/<int:slice_i>')
 ROUTE_LABEL_PREVIEW_IMAGE = (
     '/i/<ui_id>/label/<label_type>/<axis>/<int:slice_i>/preview')
-ROUTE_LABEL_CONTOUR_IMAGE = ('/i/<ui_id>/contour/<label_type>/<axis>/<int:slice_i>')
+ROUTE_LABEL_CONTOUR_IMAGE = ('/i/<ui_id>/contour/<label_type>/<axis>/'
+    '<int:slice_i>')
 ROUTE_GLYPH_IMAGE = ('/i/<ui_id>/glyph/<glyph_type>/<vivo>/<int:session>/'
     '<int:slice_i>/<int:row>/<int:col>')
 ROUTE_GLYPH_PREVIEW_IMAGE = (
@@ -141,7 +142,7 @@ def get_default_subject_info():
     ui_id = model.get_default_subject()
     return retrieve_subject_info(ui_id)
 
-@app.route('/info/<ui_id>', methods=['GET'])
+@app.route('/info/<int:ui_id>', methods=['GET'])
 def get_subject_info(ui_id):
     return retrieve_subject_info(ui_id)
 
@@ -171,6 +172,7 @@ def _make_image_request(img_path, prefix='/smda/atlasimg/', content_type='image/
             #'Content-Disposition': 'filename="{0}"'.format(
             #    basename),
         }
+        app.logger.debug('headers {0}'.format(headers))
         status = STAT_OK
     else:
         headers = {'Content-Type': TEXT_HTML_CONTENT}
@@ -243,7 +245,8 @@ def get_label_image_preview(ui_id, label_type, axis, slice_i):
 
 @app.route(ROUTE_LABEL_CONTOUR_IMAGE, methods=['GET'])
 def get_label_contour_image(ui_id, label_type, axis, slice_i):
-    contour_path = model.get_label_contour_path(ui_id, label_type, axis, slice_i)
+    contour_path = model.get_label_contour_path(ui_id, label_type, axis,
+        slice_i)
     return _make_image_request(contour_path, content_type=TEXT_HTML_CONTENT)
 
 @app.route(ROUTE_GLYPH_IMAGE, methods=['GET'])

@@ -91,14 +91,14 @@
           <div ng-show="viewer.context.session_names.length">
             <label class="viewerLabel">
               Sessions
+              <select id="sessionDropDown" class="viewerLayerDropDown"
+                  ng-model="viewer.context.session_name"
+                  ng-change="viewer.context.setSessionName(viewer.context.session_name)">
+                <option ng-repeat="session_name in viewer.context.session_names" value="{{session_name}}">
+                  {{session_name}}
+                </option>
+              </select>
             </label>
-            <select class="viewerLayerDropDown"
-                ng-model="viewer.context.session_name"
-                ng-change="viewer.context.setSessionName(viewer.context.session_name)">
-              <option ng-repeat="session_name in viewer.context.session_names" value="{{session_name}}">
-                {{session_name}}
-              </option>
-            </select>
           </div>
           <!-- View class box -->
           <label class="viewerLabel">
@@ -134,7 +134,7 @@
                 dnd-handle/>
               <input type="checkbox" class="viewerCheckboxInput"
                 ng-model="view_layer.active"
-                ng-change="viewer.context.toggleView(view_layer.key)"
+                ng-change="viewer.context.toggleView(view_layer.id)"
                 dnd-nodrag/>
               <span ng-class="view_layer.getTextClass()">
                 {{view_layer.name}}
@@ -188,7 +188,7 @@
           <label class="viewerLabel">
             Sagittal (L -> R)
             <input id="crosshairX" class="viewerNumberInput" type="number"
-            min="{{viewer.context.min_sa_slice}}" step="1" max="{{viewer.context.max_sa_slice}}"
+              min="{{viewer.context.min_sa_slice}}" step="1" max="{{viewer.context.max_sa_slice}}"
               tooltip="Sagittal Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
               ng-model="viewer.sa_slice" ng-change="viewer.context.setSagittalSlice(viewer.sa_slice)"
               number-convert />
@@ -209,7 +209,7 @@
           <label class="viewerLabel">
             Coronal (P -> A)
             <input id="crosshairZ" class="viewerNumberInput" type="number"
-            min="{{viewer.context.min_slice}}" step="1" max="{{viewer.context.max_slice}}"
+              min="{{viewer.context.min_slice}}" step="1" max="{{viewer.context.max_slice}}"
               tooltip="Coronal Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
               ng-model="viewer.slice" ng-change="viewer.context.setCoronalSlice(viewer.slice)"
               number-convert />
@@ -230,7 +230,7 @@
           <label class="viewerLabel">
             Axial (I -> S)
             <input id="crosshairY" class="viewerNumberInput" type="number"
-            min="{{viewer.context.min_ax_slice}}" step="1" max="{{viewer.context.max_ax_slice}}"
+              min="{{viewer.context.min_ax_slice}}" step="1" max="{{viewer.context.max_ax_slice}}"
               tooltip="Axial Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
               ng-model="viewer.ax_slice" ng-change="viewer.context.setAxialSlice(viewer.ax_slice)"
               number-convert />
@@ -277,7 +277,6 @@
           <label class="viewerLabel">
             Axial Position (in mm)<br>
             <input id="crosshairY" class="viewerNumberInput" type="text"
-            min="{{viewer.context.min_ax_slice}}" step="1" max="{{viewer.context.max_ax_slice}}"
               tooltip="Axial Position" tooltip-popup-delay="{{viewer.tooltip_delay}}"
               ng-value="viewer.context.getAxialSlicePosition()"
               ng-disabled="true"/>

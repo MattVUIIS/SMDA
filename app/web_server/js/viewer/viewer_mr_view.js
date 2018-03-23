@@ -18,8 +18,8 @@ ViewerMRPanel.prototype.buildPreviewTemplateURL = function(url_start,
         .join('/');
 };
 
-function MRView(context, view_class, submodality, name) {
-	View.call(this, context, view_class, 'MR', submodality, name, {
+function MRView(context, id, view_class, submodality, name) {
+	View.call(this, context, id, view_class, 'MR', submodality, name, {
         'coronal': new ViewerMRPanel(this, context.canvas.coronal),
         'axial': new ViewerMRPanel(this, context.canvas.axial),
         'sagittal': new ViewerMRPanel(this, context.canvas.sagittal),
@@ -67,6 +67,9 @@ MRView.prototype.loadResource = function(resource) {
         {'update_bounds': false});
 }
 MRView.prototype.setSessionName = function(session_name, volume, options) {
+    if(volume === null) {
+        volume = this.volume;
+    }
     if(session_name.indexOf('-') != -1) {
         let [vivo, session] = session_name.split('-', 2);
         return this.setVivoAndSession(vivo, session, volume, options);

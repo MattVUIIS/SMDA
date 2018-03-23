@@ -65,6 +65,9 @@
     overflow: visible;
     white-space: nowrap;
     z-index: 1000000 !important;
+    font-weight: bold;
+    -webkit-filter: invert(100%);
+    filter: invert(100%);
 }
 #ctnrViewerPanControls {
     text-align: center;

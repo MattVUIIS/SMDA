@@ -63,9 +63,6 @@ ViewerContext.prototype.setResource = function(resource, view_params) {
     console.log('resource: ' + JSON.stringify(this.resource));*/
     return this.initializeViews(view_params);
 }
-ViewerContext.prototype.isViewActive = function(view) {
-    return view in this.views && this.views[view].active;
-}
 ViewerContext.prototype.setCanvasElements = function() {
     let canvas_spaces = Math.pow(2, Math.ceil(Math.log2(this.canvas_n)));
     let canvas_row_n = Math.floor(Math.sqrt(canvas_spaces));
@@ -118,7 +115,7 @@ ViewerContext.prototype.initializeViews = function(view_params) {
         this.max_alpha, x)) : this.max_alpha;
     view_params = this.view_params = {
         subject: this.subject_id,
-        view: view_params.view || 'MR',
+        view: view_params.view || 'BL',
         layers: view_params.layers || '',
         slice: view_params.slice || 0,
         ax_slice: view_params.ax_slice || 0,
@@ -199,48 +196,48 @@ ViewerContext.prototype.initializeViews = function(view_params) {
     this.max_mag = Math.pow(this.mag_factor, this.max_level - this.min_level);
     let view_class = new ViewerViewClass(this, 'accessory-overlay', 'Accessory Overlays');
     view_class.setViews([
-        new GlyphView(this, view_class, 'CSD', 'CSD glyphs'),
-        new GlyphView(this, view_class, 'DTI', 'DTI glyphs'),
-        new LabelView(this, view_class, 'roi', 'ROI Label'),
-        new LabelView(this, view_class, 'BDAcount', 'BDA Count Label'),
-        new LabelView(this, view_class, 'MR', 'MR Label'),
+        new GlyphView(this, 'G1', view_class, 'CSD', 'CSD glyphs'),
+        new GlyphView(this, 'G2', view_class, 'DTI', 'DTI glyphs'),
+        new LabelView(this, 'L1', view_class, 'roi', 'ROI Label'),
+        new LabelView(this, 'L2', view_class, 'BDAcount', 'BDA Count Label'),
+        new LabelView(this, 'L3', view_class, 'MR', 'MR Label'),
     ]);
     view_class.setViewDefault('label.BDAcount');
     this.addViewClass(view_class);
     this.has_thickness = false;
     view_class = new ViewerViewClass(this, 'mri', 'MRI');
     view_class.setViews([
-        new MRView(this, view_class, 'T2', 'T2'),
-        new MRView(this, view_class, 'Diffusion_tensor', 'Diffusion Tensor'),
-        new MRView(this, view_class, 'FA', 'FA'),
-        new MRView(this, view_class, 'MD', 'MD'),
-        new MRView(this, view_class, 'Mean_B0', 'Mean B0'),
-        new MRView(this, view_class, 'Mean_DW', 'Mean DW'),
-        new MRView(this, view_class, 'RA', 'RA'),
-        //new MRView(this, view_class, 'VEC1', 'VEC1'),
-        new MRView(this, view_class, 'VR', 'VR'),
-        new MRView(this, view_class, 'CMAP', 'CMAP'),
-        new AggregateMRView(this, view_class, 't1-template', 't1'),
-        new AggregateMRView(this, view_class, 't2-template', 't2'),
-        new AggregateMRView(this, view_class, 'exvivo-fa-template', 'exvivo-fa'),
-        new AggregateMRView(this, view_class, 'exvivo-structural-template', 'exvivo-structural'),
-        new AggregateMRView(this, view_class, 'invivo-fa-template', 'invivo-fa'),
-        new AggregateMRView(this, view_class, 'invivo-md-template', 'invivo-md'),
-        new AggregateMRView(this, view_class, 'pd-template', 'pd'),
-        new AggregateMRView(this, view_class, 'brainmask', 'brainmask'),
+        new MRView(this, 'T2', view_class, 'T2', 'T2'),
+        new MRView(this, 'DT', view_class, 'Diffusion_tensor', 'Diffusion Tensor'),
+        new MRView(this, 'FA', view_class, 'FA', 'FA'),
+        new MRView(this, 'MD', view_class, 'MD', 'MD'),
+        new MRView(this, 'B0', view_class, 'Mean_B0', 'Mean B0'),
+        new MRView(this, 'DW', view_class, 'Mean_DW', 'Mean DW'),
+        new MRView(this, 'RA', view_class, 'RA', 'RA'),
+        //new MRView(this, 1, view_class, 'VEC1', 'VEC1'),
+        new MRView(this, 'VR', view_class, 'VR', 'VR'),
+        new MRView(this, 'CM', view_class, 'CMAP', 'CMAP'),
+        new AggregateMRView(this, 'T1t', view_class, 't1-template', 't1'),
+        new AggregateMRView(this, 'T2t', view_class, 't2-template', 't2'),
+        new AggregateMRView(this, 'EFt', view_class, 'exvivo-fa-template', 'exvivo-fa'),
+        new AggregateMRView(this, 'ESt', view_class, 'exvivo-structural-template', 'exvivo-structural'),
+        new AggregateMRView(this, 'IFt', view_class, 'invivo-fa-template', 'invivo-fa'),
+        new AggregateMRView(this, 'IMt', view_class, 'invivo-md-template', 'invivo-md'),
+        new AggregateMRView(this, 'PDt', view_class, 'pd-template', 'pd'),
+        new AggregateMRView(this, 'BM', view_class, 'brainmask', 'brainmask'),
     ]);
     view_class.setViewDefault('MR.T2');
     view_class.setViewDefault('aggregateMR.t1-template');
     this.addViewClass(view_class);
     view_class = new ViewerViewClass(this, 'block', 'Block');
     view_class.setViews([
-        new BlockView(this, view_class),
+        new BlockView(this, 'BL', view_class),
     ]);
     view_class.setViewDefault('block');
     this.addViewClass(view_class);
     view_class = new ViewerViewClass(this, 'hist', 'Histology');
     view_class.setViews([
-        new HistView(this, view_class),
+        new HistView(this, 'HI', view_class),
     ]);
     view_class.setViewDefault('hist');
     this.addViewClass(view_class);
@@ -322,18 +319,18 @@ ViewerContext.prototype.setLayers = function(layers) {
         return this.view_params; //No change
     }
     for(let i in layers) {
-        let key = layers[i];
-        if(!this.selectable_views.has(key)) {
-            console.log('invalid selectable key: ' + key);
+        let id = layers[i];
+        if(!this.selectable_views.has(id)) {
+            console.log('invalid selectable id: ' + id);
             return this.view_params; //No change
         }
     }
     this.layers.length = 0;
     for(let i in layers) {
-        let key = layers[i];
-        let view = this.views[key];
+        let id = layers[i];
+        let view = this.views[id];
         view.layer = parseInt(i);
-        this.layers.push(key);
+        this.layers.push(id);
     }
     //console.log('set layers to ' + JSON.stringify(this.layers));
     let layers_str = this.view_params.layers = this.layers.join(',');
@@ -345,16 +342,16 @@ ViewerContext.prototype.setLayers = function(layers) {
     this.updatePageState();
     return this.view_params;
 }
-ViewerContext.prototype.moveLayer = function(key, to) {
+ViewerContext.prototype.moveLayer = function(id, to) {
     let layers = this.layers.slice();
-    let from = layers.indexOf(key);
+    let from = layers.indexOf(id);
     if(from < 0) {
-        console.log('invalid layer ' + key);
+        console.log('invalid layer ' + id);
         return this.view_params; //No change
     }
-    key = layers.splice(from, 1)[0];
+    id = layers.splice(from, 1)[0];
     if(to > from) to--;
-    layers.splice(to, 0, key);
+    layers.splice(to, 0, id);
     return this.setLayers(layers);
 }
 ViewerContext.prototype.setNewSubject = function(subject_id) {
@@ -377,8 +374,8 @@ ViewerContext.prototype.onNewSubjectReady = function(subject_id, resource) {
     });
     this.setScopeVariable('subject', this.subject_id);
     let views_active = 0;
-    for(let key in this.views) {
-        let view = this.views[key];
+    for(let id in this.views) {
+        let view = this.views[id];
         if(view.empty) {
             view.deactivate();
         }
@@ -390,6 +387,9 @@ ViewerContext.prototype.onNewSubjectReady = function(subject_id, resource) {
         view_class.loadResource();
         view_class.updateVisibilityFromViews();
         view_class.activateDefaultViews();
+    }
+    for(let axis in this.canvas) {
+        this.checkSliceBounds(axis);
     }
     this.updatePageState();
     return this.view_params;
@@ -424,38 +424,14 @@ ViewerContext.prototype.checkPanBounds = function(axis, axis_prefix) {
 };
 ViewerContext.prototype.checkSliceBounds = function(axis, axis_prefix) {
     let canvas = this.canvas[axis];
-    let min_slice = Infinity;
-    let max_slice = -Infinity;
     axis_prefix = axis_prefix !== undefined ? axis_prefix :
         this.axis_prefixes[this.axes.indexOf(axis)];
     let slice_name = axis_prefix + 'slice';
     let min_slice_name = 'min_' + slice_name;
     let max_slice_name = 'max_' + slice_name;
     //console.log('setting ' + axis + ' slice bounds');
-    for(let key in this.views) {
-        let view = this.views[key];
-        if(this.selectable_views.has(view.key)) {
-            let panel = view.panels[axis];
-            if(!panel) continue;
-            //console.log(axis + ' ' + view.name + ' check min_slice ' + panel.min_slice + ' max_slice ' +
-            //    panel.max_slice);
-            if((panel.min_slice !== null) && panel.min_slice < min_slice) {
-                min_slice = panel.min_slice;
-                //console.log(axis + ' ' + view.name + ' decreased min_slice to ' + min_slice);
-            }
-            if((panel.max_slice !== null) && panel.max_slice > max_slice) {
-                max_slice = panel.max_slice;
-                //console.log(axis + ' ' + view.name + ' increased max_slice to ' + max_slice);
-            }
-        }
-    }
-    if((min_slice == Infinity) || (max_slice == -Infinity)) {
-        min_slice = 1;
-        max_slice = 1;
-        //console.log('set min and max slice to ' + min_slice + ' and ' + max_slice);
-    }
-    this[min_slice_name] = min_slice;
-    this[max_slice_name] = max_slice;
+    let min_slice = this[min_slice_name] = this.resource.volume[axis][0];
+    let max_slice = this[max_slice_name] = this.resource.volume[axis][1];
     //console.log(axis + ' min slice ' + min_slice + ' max slice ' + max_slice);
     //console.log('calling ' + slice_name + ' setSlice with ' + this[slice_name]);
     this.setSlice(axis, this[slice_name], axis_prefix);
@@ -603,8 +579,8 @@ ViewerContext.prototype.setSlice = function(axis, slice, axis_prefix, crosshair_
     //console.log('set ' + axis + ' slice to ' + this[slice_name]);
     this.setScopeVariable(slice_name, this[slice_name]);
     //Update the view bounds of all the panels
-    for(let key in this.views) {
-        let view = this.views[key];
+    for(let id in this.views) {
+        let view = this.views[id];
         if(view.selectable) {
             view.setSlice(axis, slice);
         }
@@ -746,13 +722,13 @@ ViewerContext.prototype.getNumberOfActiveCanvas = function() {
     return n;
 }
 ViewerContext.prototype.addView = function(view) {
-    this.views[view.key] = view;
+    this.views[view.id] = view;
     if(view.name) {
-        this.layers.push(view.key);
+        this.layers.push(view.id);
     }
-    this.valid_views.add(view.key);
+    this.valid_views.add(view.id);
     if(view.selectable) {
-        this.selectable_views.add(view.key);
+        this.selectable_views.add(view.id);
     }
     return view;
 }
@@ -801,12 +777,13 @@ ViewerContext.prototype.setSessionName = function(session_name) {
     let [vivo, session] = session_name.split('-', 2);
     this.view_params.session = session;
     this.view_params.vivo = vivo;
+    //console.log('setSessionName ' + session_name);
     if('mri' in this.view_classes) {
-        this.view_classes['mri'].setVivoAndSession(vivo, session, view.volume);
+        this.view_classes['mri'].setVivoAndSession(vivo, session, null);
     }
     if('accessory-overlay' in this.view_classes) {
-        this.view_classes['accessory-overlay'].setVivoAndSession(vivo, session,
-            view.volume);
+        this.view_classes['accessory-overlay'].setVivoAndSession(vivo,
+            session, null);
     }
 }
 ViewerContext.prototype.drawScene = function() {
