@@ -858,6 +858,10 @@ def get_meta_data(root_path, subject_list, modality_list, no_ask_pass):
     meta_config_path = os.path.join(root_path, 'smda.yaml')
     meta_config = read_config(meta_config_path)
     config_default_subject = meta_config.get('default_subject')
+    subjects_config = meta_config.get('subjects')
+    if subject_list:
+        subjects_config = [config for config in subjects_config
+            if config.get('name') in subject_list]
     default_subject = None
     default_by = None
     #Open the database
@@ -895,13 +899,16 @@ def get_meta_data(root_path, subject_list, modality_list, no_ask_pass):
         c.execute(QUERY_INSERT_AGGREGATE_MR_TYPES)
         AGGREGATE_MR_TYPES.update((x[0], x[1:]) for x in c.fetchall())
         #Scan each subject folder
-        for subject_name in subject_list:
+        for config in subjects_config:
+            subject_name = config.get('name')
+            if not subject_name:
+                continue
             subject_path = os.path.join(root_path, subject_name)
             if not os.path.isdir(subject_path):
                 continue
-            subject_config_path = os.path.join(subject_path, 'config.yaml')
+            #subject_config_path = os.path.join(subject_path, 'config.yaml')
             #Get the subject configuration and volume size
-            config = read_config(subject_config_path)
+            #config = read_config(subject_config_path)
             display_name = config.get('display_name', subject_name)
             c.execute(QUERY_INSERT_SUBJECT, (subject_name, display_name))
             subject_id, ui_id = c.fetchone()
@@ -1438,7 +1445,7 @@ if __name__ == '__main__':
     if options.subject:
         subject_list = options.subject
     else:
-        subject_list = sorted(os.listdir(atlas_root))
+        subject_list = []
 
     modality_list = []
     if options.block:

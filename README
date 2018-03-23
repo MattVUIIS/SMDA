@@ -10,7 +10,8 @@ This directory can be configured in app/web_server/smda_web_server.cfg. The
 required structure of the volumetric data is described in <another document>.
 
 The meta information is set up using the 'meta_updater' script under the
-app/web_server directory of this project.
+app/web_server directory of this project. It reads information from smda.yaml
+to locate the subjects and store access information into a PostgreSQL database.
 
 ================================================================================
 Installation
