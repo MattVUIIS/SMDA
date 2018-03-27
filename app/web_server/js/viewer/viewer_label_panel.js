@@ -188,9 +188,11 @@ ViewerLabelPanel.prototype.draw = function() {
     mat4.identity(this.mv_matrix);
     let scale = context[canvas.axis_prefix + 'scale'] *
         context[canvas.axis_prefix + 'magnification'];
-    let pan_x = context['pan_' + canvas.axis_prefix + 'x'];
-    let pan_y = context['pan_' + canvas.axis_prefix + 'y'];
     let attrib = this.attrib;
+    let xoffset = attrib && ('xoffset' in attrib) ? attrib.xoffset : 0;
+    let yoffset = attrib && ('yoffset' in attrib) ? attrib.yoffset : 0;
+    let pan_x = context['pan_' + canvas.axis_prefix + 'x'] + xoffset;
+    let pan_y = context['pan_' + canvas.axis_prefix + 'y'] + yoffset;
     let xscale = (attrib && ('horizontal_flip' in attrib) ? -scale : scale)
         * (attrib && ('xscale' in attrib) ? attrib.xscale : 1);
     let yscale = (attrib && ('vertical_flip' in attrib) ? -scale : scale)

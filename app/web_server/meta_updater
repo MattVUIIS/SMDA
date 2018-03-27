@@ -132,7 +132,9 @@ class ImageAxis:
         self.image_w = None
         self.image_h = None
         self.path_template = None
-        return self._build_from_path(path, item, self.prefix_dir)
+        if self.config.get('skip', False):
+            return None
+        self._build_from_path(path, item, self.prefix_dir)
 
     def _build_from_path(self, path, item, prefix_dir, is_split_folder=False):
         #print('build from path', path)
@@ -206,11 +208,10 @@ class ImageAxis:
 
     def define_subaxis(self, subaxis_name, subaxis_path, item):
         subaxis_config = self.config and self.config.get(subaxis_name, {}) or {}
+        #The "all_*" in smda.yaml will match any subaxis configuration
         if not subaxis_config:
-            key_match = None
             for key in self.config.keys():
                 if re.match(r'^all(.*)\*$', key):
-                    key_match = key
                     subaxis_config = self.config.get(key, {})
                     break
         #print('define_subaxis', subaxis_name, 'config', subaxis_config)
@@ -221,25 +222,6 @@ class ImageAxis:
 
     def get_subaxis(self, subaxis_name):
         return self.subaxes.get(subaxis_name)
-
-    def get_full_path_template(self, *extra_paths, **keywords):
-        full_path_template = ''
-        last_axis = axis = self
-        while axis:
-            last_axis = axis
-            try:
-                path_template = axis.path_template.format(**keywords)
-            except KeyError:
-                path_template = axis.path_template
-            #print('add template', path_template)
-            full_path_template = os.path.join(path_template, full_path_template)
-            axis = axis._parent_axis
-        full_path_template = os.path.join(last_axis._parent.path,
-            full_path_template, *extra_paths)
-        #print('full_path_template', full_path_template)
-        full_path_template = os.path.relpath(full_path_template, self.root.path)
-        #print('final template', full_path_template)
-        return full_path_template
 
     def get_rel_path_template(self, parent_axis, rel_path, *extra_paths, **keywords):
         rel_path_template = ''
@@ -367,6 +349,8 @@ CREATE TABLE "modality_attributes" (
     rotate TEXT NULL,
     xscale REAL NULL,
     yscale REAL NULL,
+    xoffset REAL NULL,
+    yoffset REAL NULL,
     thickness_in_mm REAL NULL
 );
 
@@ -797,10 +781,6 @@ INSERT INTO "aggregate_mr_slice" (amr_vol_axis_id, slice, file_path)
 VALUES %s RETURNING amr_slice_id
 """
 
-ATLAS_ROOT = None
-
-MODALITIES = {}
-
 HIST_STAINS = {}
 
 MR_TYPES = {}
@@ -841,6 +821,8 @@ VALID_ATTRS = {
     'rotate': validate_rotate,
     'xscale': float,
     'yscale': float,
+    'xoffset': float,
+    'yoffset': float,
     'thickness_in_mm': float,
 }
 
@@ -914,8 +896,8 @@ def get_meta_data(root_path, subject_list, modality_list, no_ask_pass):
             subject_id, ui_id = c.fetchone()
             subject = atlas_root.add_subject(subject_name, display_name,
                 subject_id, ui_id)
-            modality_nodes = define_modality_nodes(subject, subject_path,
-                modality_list, config)
+            define_modality_nodes(subject, subject_path, modality_list,
+                config)
             if subject_name == config_default_subject:
                 default_subject = subject
                 default_by = 'configuration'
@@ -971,7 +953,6 @@ def define_modality_nodes(subject, subject_path, modality_list, config):
         rule = modality_table.get(modality_name)
         if rule:
             rule(subject, path, modality_config)
-    return subject.modalities
 
 def get_modality_data(db_conn, subject):
     modality_table = {
@@ -1032,6 +1013,8 @@ def define_modality_block(subject, block_path, block_config):
 def get_block_data(db_conn, modality):
     print('update meta:', modality.path)
     slice_axis = modality.get_axis('coronal')
+    if not slice_axis.paths:
+        return None
     if slice_axis.get_config('reverse_slices', False):
         print('reversing block slices')
         slice_axis.reverse_paths()
@@ -1126,6 +1109,8 @@ def define_modality_mr(subject, mr_path, mr_config):
             print(mode_name, 'limit volumes:', limit)
         for volume in volumes:
             volume_path = os.path.join(mode_path, volume)
+            if not os.path.isdir(volume_path):
+                continue
             volume_axis = mr_axis.define_subaxis(
                 has_volumes and volume or None, volume_path, '')
             for vivo in os.listdir(volume_path):
@@ -1135,6 +1120,8 @@ def define_modality_mr(subject, mr_path, mr_config):
                 for session in os.listdir(vivo_path):
                     session_name = vivo + '-' + session
                     session_path = os.path.join(vivo_path, session)
+                    if not os.path.isdir(session_path):
+                        continue
                     session_axis = volume_axis.define_subaxis(session_name,
                         session_path, '')
                     for axis_name in os.listdir(session_path):
@@ -1160,6 +1147,9 @@ def get_mr_data(db_conn, modality):
                     (mr_mod_id, session, invivo, volume))
                 mr_session_id = c.fetchone()[0]
                 for axis_name, slice_axis in session_axis.subaxes.items():
+                    if not slice_axis.paths:
+                        print('skip', axis_name, 'axis')
+                        continue
                     axis_id = AXIS[axis_name]
                     attrib_id = _insert_attribute_row(db_conn,
                         slice_axis.get_attributes())
@@ -1205,6 +1195,9 @@ def get_aggregate_mr_data(db_conn, modality):
             (modality.subject.id, amr_type_id))
         amr_mod_id = c.fetchone()[0]
         for axis_name, slice_axis in amr_axis.subaxes.items():
+            if not slice_axis.paths:
+                print('skip', axis_name, 'axis')
+                continue
             axis_id = AXIS[axis_name]
             attrib_id = _insert_attribute_row(db_conn,
                 slice_axis.get_attributes())
@@ -1247,6 +1240,9 @@ def get_label_data(db_conn, modality):
             label_type_id))
         label_mod_id = c.fetchone()[0]
         for axis_name, slice_axis in label_type_axis.subaxes.items():
+            if not slice_axis.paths:
+                print('skip', axis_name, 'axis')
+                continue
             axis_id = AXIS[axis_name]
             attrib_id = _insert_attribute_row(db_conn,
                 slice_axis.get_attributes())
@@ -1281,11 +1277,13 @@ def define_modality_glyph(subject, glyph_path, glyph_config):
         glyph_type_axis = modality.define_axis(glyph_type, glyph_type_path,
             '')
         for session_name in os.listdir(glyph_type_path):
-            session_path = os.path.join(glyph_type_path, session_name)
-            print('session_path:', session_path)
             match = re.search('(.*)-(\d+)', session_name)
             if not match:
                 continue
+            if match.group(1) not in ('invivo', 'exvivo'):
+                continue
+            session_path = os.path.join(glyph_type_path, session_name)
+            print('session_path:', session_path)
             session_axis = glyph_type_axis.define_subaxis(session_name,
                 session_path, '')
             slice_axis = session_axis.define_subaxis('coronal',
@@ -1310,15 +1308,16 @@ def get_glyph_data(db_conn, modality):
         glyph_mod_id = c.fetchone()[0]
         for session_name, session_axis in glyph_type_axis.subaxes.items():
             print('update meta:', session_axis.path)
+            slice_axis = session_axis.get_subaxis('coronal')
+            if not slice_axis.paths:
+                print('skip', axis_name, 'axis')
+                continue
             vivo, session = session_name.split('-')
             invivo = 1 if vivo == 'invivo' else 0
-            slice_axis = session_axis.get_subaxis('coronal')
-
             if slice_axis.get_config('reverse_slices', False):
                 print('reversing', session_name, 'glyph slices')
                 slice_axis.reverse_paths()
             attrib_id = _insert_attribute_row(db_conn, slice_axis.get_attributes())
-
             #Insert each glyph session
             row_axis = slice_axis.get_subaxis('row')
             col_axis = row_axis.get_subaxis('column')
@@ -1328,78 +1327,13 @@ def get_glyph_data(db_conn, modality):
                 row_axis.min_item, row_axis.max_item,
                 col_axis.min_item, col_axis.max_item, attrib_id))
             session_id = c.fetchone()[0]
-
             #Insert glyph slices
             slices = [((session_id, sl,
                 col_axis.get_rel_path_template(slice_axis, img_path),
                 os.path.join(img_path, 'preview')))
                 for sl, img_path in slice_axis.get_relpaths()]
-
             psycopg2.extras.execute_values(c, QUERY_INSERT_GLYPH_SLICE,
                 slices, page_size=PAGE_SIZE)
-
-# def get_glyph_data(db_conn, subject, glyphs_path, config):
-#     print('glyphs_path:', glyphs_path)
-#     start_range, end_range = subject['volume']['coronal']
-#     c = db_conn.cursor()
-#     c2 = db_conn.cursor()
-#     for glyph_type in os.listdir(glyphs_path):
-#         glyph_config = config.get('glyphs', {}).get(glyph_type, {})
-#         if glyph_config.get('skip', False):
-#             continue
-#         glyph_path = os.path.join(glyphs_path, glyph_type)
-#         print('glyph path:', glyph_path)
-#         glyph_type_id = GLYPH_TYPES[glyph_type]
-#         c.execute(QUERY_INSERT_GLYPH_MODALITY, (subject['id'], glyph_type_id))
-#         glyph_mod_id = c.fetchone()[0]
-#         path_sl_range = list(range(start_range, end_range + 1))
-#         if glyph_config.get('reverse_slices', False):
-#             print('reversing', glyph_type, 'glyph slices')
-#             path_sl_range = list(reversed(path_sl_range))
-#         for session_name in os.listdir(glyph_path):
-#             session_path = os.path.join(glyph_path, session_name)
-#             print('session_path:', session_path)
-#             match = re.search('(.*)-(\d+)', session_name)
-#             if not match:
-#                 continue
-#             vivo, session = match.group(1, 2)
-#             session = int(session)
-#             invivo = 1 if vivo == 'invivo' else 0
-#             attrib = _check_attributes(glyph_config.get('attrib'),
-#                 session_path)
-#             attrib_id = _insert_attribute_row(db_conn, attrib)
-#             slice_cllt = _get_collection_info(session_path, 'slice')
-#             min_slice = slice_cllt.min_item
-#             max_slice = slice_cllt.max_item
-#             first_slice_path = os.path.join(atlas_root,
-#                 slice_cllt.paths[min_slice])
-#             row_cllt = _get_collection_info(first_slice_path, 'row',
-#                 slice_cllt.path_template)
-#             min_row = row_cllt.min_item
-#             max_row = row_cllt.max_item
-#             first_row_path = os.path.join(atlas_root,
-#                 row_cllt.paths[min_row])
-#             col_cllt = _get_collection_info(first_row_path, 'col',
-#                 row_cllt.path_template)
-#             min_col = col_cllt.min_item
-#             max_col = col_cllt.max_item
-#             image_w = col_cllt.image_w
-#             image_h = col_cllt.image_h
-#             c2.execute(QUERY_INSERT_GLYPH_SESSION, (glyph_mod_id, session,
-#                 invivo, min_slice, max_slice, image_w, image_h,
-#                 min_row, max_row, min_col, max_col, attrib_id))
-#             session_id = c2.fetchone()[0]
-#             images = []
-#             for sl, path_sl in zip(range(start_range, end_range + 1), path_sl_range):
-#                 if path_sl in slice_cllt.paths:
-#                     images.append((session_id, sl,
-#                         os.path.join(slice_cllt.path_template.format(slice=path_sl),
-#                             'row_{row}', 'col_{col}.png'),
-#                         os.path.join(slice_cllt.path_template.format(slice=path_sl),
-#                             'preview.png')))
-#             psycopg2.extras.execute_values(c2, QUERY_INSERT_GLYPH_SLICE,
-#                 images, page_size=PAGE_SIZE)
-
 
 def read_config(yaml_path):
     config = {}

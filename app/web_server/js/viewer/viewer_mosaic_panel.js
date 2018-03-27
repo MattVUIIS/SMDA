@@ -76,8 +76,10 @@ ViewerMosaicPanel.prototype.draw = function() {
     let yscale = (attrib && ('vertical_flip' in attrib) ? -scale : scale)
         * (attrib && ('yscale' in attrib) ? attrib.yscale : 1);
     let [xsign, ysign] = [Math.sign(xscale), Math.sign(yscale)];
-    let [pan_x, pan_y] = [context.pan_x * view.max_col,
-        context.pan_y * view.max_row];
+    let xoffset = attrib && ('xoffset' in attrib) ? attrib.xoffset : 0;
+    let yoffset = attrib && ('yoffset' in attrib) ? attrib.yoffset : 0;
+    let [pan_x, pan_y] = [(context.pan_x + xoffset) * view.max_col,
+        (context.pan_y + yoffset) * view.max_row];
     //For binary space tree calculation, we need each of the corners
     //of the view area multiplied by the level of the BST
     let bst_level = Math.log2(view.max_row);
@@ -192,9 +194,6 @@ ViewerMosaicPanel.prototype.draw = function() {
             gl.bindBuffer(gl.ARRAY_BUFFER, this.texcoord_bf);
             gl.vertexAttribPointer(shader.attrib['aTexCoord'],
                 this.texcoord_bf.item_sz, gl.FLOAT, false, 0, 0);
-            if(view.modality == 'hist') {
-                //console.log('histology draw ' + this.pos_bf.item_n);
-            }
             //Draw the ABO as a triangle strip
             gl.drawArrays(gl.TRIANGLES, 0, canvas.pos_bf.item_n);
         }

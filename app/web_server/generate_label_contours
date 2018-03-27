@@ -115,19 +115,23 @@ def _write_contour_data(axis, axis_path, label_config, label_type,
     if axis_attrib:
         print(label_type, axis, 'axis_attrib', axis_attrib)
     for root, dirs, files in os.walk(axis_path):
-        random.shuffle(files)
-        for item_name in files:
+        #random.shuffle(files)
+        for item_name in sorted(files):
             if not item_name.startswith('slice'):
                 continue
             img_path = os.path.join(axis_path, root, item_name)
-            if not imghdr.what(img_path):
+            _, ext = os.path.splitext(img_path)
+            if ext not in ('.png', '.jpg'):
                 continue
             item_num = int(re.search('(\d+)', item_name).group(1))
             slice_contours_path = os.path.join(contours_path,
                 'slice_{0}.txt'.format(item_num))
-            if os.path.exists(slice_contours_path) and not overwrite_files:
-                print(img_path, 'skipped')
-                continue
+            if os.path.exists(slice_contours_path):
+                if not overwrite_files:
+                    print(img_path, 'skipped')
+                    continue
+                else:
+                    os.remove(slice_contours_path)
             img = PIL.Image.open(img_path)
             scale = 64
             print(slice_contours_path, 'resizing image')

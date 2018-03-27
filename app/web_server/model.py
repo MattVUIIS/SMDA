@@ -205,6 +205,7 @@ WHERE s.ui_id = (%s) AND gt.glyph_type = (%s) AND gse.session = (%s) AND gse.inv
 """
 
 def _get_attrib(db_conn, attrib_id):
+    #Gets the columns of the modality_attributes entry as a dict
     c = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     c.execute(QUERY_GET_ATTRIBUTES, (attrib_id,))
     attrib = c.fetchone()
