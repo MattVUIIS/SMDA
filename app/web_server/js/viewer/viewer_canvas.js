@@ -214,13 +214,9 @@ ViewerCanvas.prototype._processPageCoordinates = function(event) {
 ViewerCanvas.prototype.resize = function() {
     let width_factor = Math.max(0, Math.floor(this.parent.parent().width()
         * this.width_perc / this.base_width));
-    if(width_factor == 0) {
-        width_factor = 1;
-        //console.log(this.axis + ' width_factor reset to ' + width_factor);
-    }
-    else {
-        //console.log(this.axis + ' width_factor: ' + width_factor);
-    }
+    /*console.log(this.axis + ' canvas resize, parent_width ' + this.parent.parent().width() +
+        ' width_perc ' + this.width_perc + ', base_width ' + this.base_width +
+        ' width_factor ' + width_factor);*/
     let height_factor = Math.max(1, width_factor);
     let width = this.base_width * width_factor;
     let height = this.base_height * height_factor;
@@ -355,10 +351,14 @@ ViewerCanvas.prototype.adjustRowSize = function() {
     let canvas_row_n = Math.floor(Math.sqrt(canvas_spaces));
     let canvas_col_n = Math.ceil(canvas_spaces / canvas_row_n);
     let cntnr_w = this.context.canvas_container.width();
+    if(cntnr_w == 0) { //Bug on Chrome and Safari
+        cntnr_w = 256;
+    }
     let canvas_margin = 1; // in pixels
     let canvas_col_w = (cntnr_w / canvas_col_n) -
         canvas_margin * (canvas_col_n - 1);
     let width_perc = canvas_col_w / cntnr_w;
+    //console.log('canvas_col_w ' + canvas_col_w + ' cntnr_w' + cntnr_w);
     //console.log('resize all canvas to width ' + width_perc);
     for(let canvas_i in this.row.canvas) {
         let canvas = this.row.canvas[canvas_i];
@@ -531,11 +531,10 @@ ViewerCanvas.prototype.drawMinimap = function() {
         if(!subslice || !subslice.preview.is_ready || subslice.preview.tex === null) {
             continue;
         }
-        if(view.modality == 'hist') {
-            //console.log('histology preview draw ' + subpanel.pos_bf.item_n);
-        }
         //Set up the view matrix
         let attrib = subpanel.attrib;
+        let xoffset = attrib && ('xoffset' in attrib) ? attrib.xoffset : 0;
+        let yoffset = attrib && ('yoffset' in attrib) ? attrib.yoffset : 0;
         let xscale = (attrib && ('horizontal_flip' in attrib) ? -1 : 1)
             * (attrib && ('xscale' in attrib) ? attrib.xscale : 1);
         let yscale = (attrib && ('vertical_flip' in attrib) ? -1 : 1)
@@ -544,9 +543,9 @@ ViewerCanvas.prototype.drawMinimap = function() {
         //xscale = -1;
         //angle = -90 * Math.PI / 180;
         mat4.identity(this.mv_matrix);
-        mat4.translate(this.mv_matrix, this.mv_matrix, [0, 0, 0]);
-        mat4.scale(this.mv_matrix, this.mv_matrix, [xscale, yscale, 1]);
+        mat4.translate(this.mv_matrix, this.mv_matrix, [xoffset, yoffset, 0]);
         mat4.rotate(this.mv_matrix, this.mv_matrix, angle, [0, 0, 1]);
+        mat4.scale(this.mv_matrix, this.mv_matrix, [xscale, yscale, 1]);
         gl.uniformMatrix4fv(shader.uniform['uPMatrix'], false, this.p_matrix);
         gl.uniformMatrix4fv(shader.uniform['uMVMatrix'], false, this.mv_matrix);
         //Set up texture and alpha

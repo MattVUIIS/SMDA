@@ -54,9 +54,11 @@ ViewerSingleImagePanel.prototype.draw = function() {
     mat4.identity(this.mv_matrix);
     let scale = context[canvas.axis_prefix + 'scale'] *
         context[canvas.axis_prefix + 'magnification'];
-    let pan_x = context['pan_' + canvas.axis_prefix + 'x'];
-    let pan_y = context['pan_' + canvas.axis_prefix + 'y'];
     let attrib = this.attrib;
+    let xoffset = attrib && ('xoffset' in attrib) ? attrib.xoffset : 0;
+    let yoffset = attrib && ('yoffset' in attrib) ? attrib.yoffset : 0;
+    let pan_x = context['pan_' + canvas.axis_prefix + 'x'] + xoffset;
+    let pan_y = context['pan_' + canvas.axis_prefix + 'y'] + yoffset;
     let xscale = (attrib && ('horizontal_flip' in attrib) ? -scale : scale)
         * (attrib && ('xscale' in attrib) ? attrib.xscale : 1);
     let yscale = (attrib && ('vertical_flip' in attrib) ? -scale : scale)
@@ -65,8 +67,8 @@ ViewerSingleImagePanel.prototype.draw = function() {
     //console.log('pos_bf ' + JSON.stringify(this.pos_bf));
     mat4.translate(this.mv_matrix, this.mv_matrix,
         [-pan_x * scale, -pan_y * scale, 0]);
-    mat4.scale(this.mv_matrix, this.mv_matrix, [xscale, yscale, 1]);
     mat4.rotate(this.mv_matrix, this.mv_matrix, angle, [0, 0, 1]);
+    mat4.scale(this.mv_matrix, this.mv_matrix, [xscale, yscale, 1]);
     gl.uniformMatrix4fv(shader.uniform['uPMatrix'], false, canvas.p_matrix);
     gl.uniformMatrix4fv(shader.uniform['uMVMatrix'], false, this.mv_matrix);
     //Bind the textures
