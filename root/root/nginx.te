@@ -1,4 +1,3 @@
-
 module nginx 1.0;
 
 require {
@@ -11,6 +10,8 @@ require {
     type httpd_t;
     type soundd_port_t;
     class tcp_socket name_connect;
+    type vmblock_t;
+    class file { getattr open read };
 }
 
 #============= httpd_t ==============
@@ -19,4 +20,4 @@ allow httpd_t httpd_sys_content_t:sock_file write;
 allow httpd_t initrc_t:unix_stream_socket connectto;
 allow httpd_t usr_t:sock_file write;
 allow httpd_t soundd_port_t:tcp_socket name_connect;
-
+allow httpd_t vmblock_t:file { getattr open read };
