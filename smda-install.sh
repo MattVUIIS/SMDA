@@ -32,7 +32,7 @@ yum -y install epel-release
 yum -y install python-devel policycoreutils-python kernel-devel
 yum -y install java-1.7.0-openjdk python-pip uwsgi
 yum -y install postgresql-devel sshfs nmap-ncat
-yum -y install nginx rabbitmq-server memcached postgresql-server samba-client cifs-utils
+yum -y install nginx memcached postgresql-server samba-client cifs-utils
 yum -y install supervisor
 yum -y install vim git pip
 EOF
@@ -61,7 +61,6 @@ copysslkeys
 ssh -p ${SRV_PORT} root@${SRV_IP} <<EOF
 set -x
 chkconfig supervisord on
-chkconfig rabbitmq-server on
 chkconfig nginx on
 chkconfig memcached on
 chkconfig postgresql on
